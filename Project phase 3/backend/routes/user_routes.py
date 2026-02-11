@@ -1,101 +1,125 @@
 # By Rise Akizaki
 
-from flask import Blueprint, session, jsonify, request
+from fastapi import APIRouter, HTTPException, status
 from db import get_db_connection
+from models import UserResponse, UserUpdate
 
-user_bp = Blueprint("user", __name__, url_prefix="/user")
+router = APIRouter()
 
-@user_bp.route("/account", methods=["GET"])
-def account():
-    user = session.get("user")
 
-    if not user:
-        return jsonify({"error": "Not logged in"}), 401
-
-    connection = get_db_connection()
-    cursor = connection.cursor(dictionary=True)
-
-    query = """
-        SELECT 
-            u.user_id,
-            u.first_name,
-            u.last_name,
-            u.email,
-            u.college_level,
-            c.college_name,
-            m.major_name,
-            u.bio
-        FROM 
-            Users u
-        LEFT JOIN 
-            Colleges c ON u.college_id = c.college_id
-        LEFT JOIN 
-            Majors m ON u.major_id = m.major_id
-        WHERE 
-            u.user_id = %s
+@router.get("/account", response_model=UserResponse)
+def get_account_data(user_id: int):
     """
-    # Left join needed for null fields (Edited with ChatGPT)
-
-    # Advanced DB Feature: Parametrized SQL Query prevents SQL Injection attacks by not concatenating the input directly onto the query
-    cursor.execute(query, (user["user_id"],))
-    data = cursor.fetchone()
-
-    cursor.close()
-    connection.close()
-
-    return jsonify(data), 200
-
-# route to edit the account itself. Updating the account is a different route
-# Request method OPTIONS added in by ChatGPT
-@user_bp.route("/account", methods=["OPTIONS", "PUT"])
-def update_account():
-    if request.method == "OPTIONS":
-        return "", 200 
-
-    user = session.get("user")
-    if not user:
-        return jsonify({"error": "Not logged in"}), 401
-
-    data = request.get_json()
+    Get user account information including college and major details.
+    Query param: user_id
+    """
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="user_id is required",
+        )
 
     connection = get_db_connection()
-    connection.start_transaction()
-    cursor = connection.cursor()
+    try:
+        cursor = connection.cursor(dictionary=True)
 
-    try: 
-        updateQuery = """
-            UPDATE 
-                Users
-            SET first_name = %s,
-                last_name = %s,
-                email = %s,
-                college_level = %s,
-                college_id = %s,
-                major_id = %s,
-                bio = %s
-            WHERE 
-                user_id = %s
+        query = """
+            SELECT 
+                u.user_id,
+                u.first_name,
+                u.last_name,
+                u.email,
+                u.college_level,
+                c.college_name,
+                m.major_name,
+                u.bio
+            FROM Users u
+            LEFT JOIN Colleges c ON u.college_id = c.college_id
+            LEFT JOIN Majors m ON u.major_id = m.major_id
+            WHERE u.user_id = %s
         """
 
-        # Advanced DB Feature: Parametrized SQL Query prevents SQL Injection attacks by not concatenating the input directly onto the query
-        cursor.execute(updateQuery, (data.get("first_name"),
-                                    data.get("last_name"),
-                                    data.get("email"),
-                                    data.get("college_level") or None,
-                                    data.get("college_id") or None,
-                                    data.get("major_id") or None,
-                                    data.get("bio") or None,
-                                    user["user_id"]))
+        cursor.execute(query, (user_id,))
+        data = cursor.fetchone()
+
+        if not data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+            )
+
+        return data
+
+    except HTTPException:
+        raise
+    except Exception as exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exception),
+        )
+    finally:
+        cursor.close()
+        connection.close()
 
 
-        # commit before closing
+@router.put("/account", response_model=dict, status_code=status.HTTP_200_OK)
+def update_account(user_id: int, user_update: UserUpdate):
+    """
+    Update user account information.
+    """
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="user_id is required",
+        )
+
+    connection = get_db_connection()
+    try:
+        connection.start_transaction()
+        cursor = connection.cursor()
+
+        # Build update query dynamically with only provided fields
+        update_fields = {}
+        if user_update.first_name is not None:
+            update_fields["first_name"] = user_update.first_name
+        if user_update.last_name is not None:
+            update_fields["last_name"] = user_update.last_name
+        if user_update.email is not None:
+            update_fields["email"] = user_update.email
+        if user_update.college_level is not None:
+            update_fields["college_level"] = user_update.college_level
+        if user_update.college_id is not None:
+            update_fields["college_id"] = user_update.college_id
+        if user_update.major_id is not None:
+            update_fields["major_id"] = user_update.major_id
+        if user_update.bio is not None:
+            update_fields["bio"] = user_update.bio
+
+        if not update_fields:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No fields to update",
+            )
+
+        # Build the SET clause
+        set_clause = ", ".join([f"{key} = %s" for key in update_fields.keys()])
+        values = list(update_fields.values()) + [user_id]
+
+        query = f"UPDATE Users SET {set_clause} WHERE user_id = %s"
+        cursor.execute(query, values)
+
         connection.commit()
-        return jsonify({"success": True}), 200
+        return {"success": True, "message": "Account updated successfully"}
 
+    except HTTPException:
+        connection.rollback()
+        raise
     except Exception as exception:
         connection.rollback()
-        return jsonify({"error": str(exception)}), 500
-
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exception),
+        )
     finally:
         cursor.close()
         connection.close()

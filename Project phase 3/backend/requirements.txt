@@ -1,4 +1,7 @@
-Flask
-Flask-Cors
+FastAPI
+uvicorn[standard]
 mysql-connector-python
 requests
+python-dotenv
+bcrypt
+python-multipart

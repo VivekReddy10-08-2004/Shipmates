@@ -1,43 +1,20 @@
-# Jacob Craig 
+# Jacob Craig
 
+from fastapi import APIRouter, HTTPException, status, Query
+from mysql.connector import Error as MySQLError
 import secrets
 from datetime import datetime, date, timedelta
-
-from flask import Blueprint, request, jsonify
-from mysql.connector import Error as MySQLError
-
 from db import get_db_connection
+from models import CreateStudyGroup
 
-bp = Blueprint("studygroups", __name__, url_prefix="/groups")
+router = APIRouter()
 
 
-@bp.route("", methods=["POST"])
-def create_group():
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=dict)
+def create_group(group_data: CreateStudyGroup):
     """
-    Create a new study group, then auto-join creator as owner via CreateStudyGroupWithOwner.
-
-    Body JSON:
-    {
-      "group_name": "...",
-      "max_members": 5,
-      "course_id": 420,
-      "is_private": false,
-      "creator_user_id": 1005
-    }
+    Create a new study group, then auto-join creator as owner.
     """
-    data = request.get_json(silent=True) or {}
-
-    required = ["group_name", "max_members", "course_id", "creator_user_id"]
-    for field in required:
-        if field not in data:
-            return jsonify({"detail": f"Missing field: {field}"}), 400
-
-    group_name = data["group_name"]
-    max_members = int(data["max_members"])
-    course_id = int(data["course_id"])
-    creator_id = int(data["creator_user_id"])
-    is_private = bool(data.get("is_private", False))
-
     conn = None
     cursor = None
 
@@ -45,10 +22,15 @@ def create_group():
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
 
-        # CALL CreateStudyGroupWithOwner(p_group_name, p_max_members, p_is_private, p_course_id, p_creator_id);
         cursor.callproc(
             "CreateStudyGroupWithOwner",
-            (group_name, max_members, is_private, course_id, creator_id),
+            (
+                group_data.group_name,
+                group_data.max_members,
+                group_data.is_private,
+                group_data.course_id,
+                group_data.creator_user_id,
+            ),
         )
 
         group_id = None
@@ -61,14 +43,20 @@ def create_group():
         conn.commit()
 
         if group_id is None:
-            return jsonify({"detail": "Failed to create group"}), 500
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create group",
+            )
 
-        return jsonify({"group_id": group_id}), 201
+        return {"group_id": group_id}
 
     except MySQLError as e:
         if conn is not None:
             conn.rollback()
-        return jsonify({"detail": str(e)}), 500
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
 
     finally:
         if cursor is not None:
@@ -77,18 +65,14 @@ def create_group():
             conn.close()
 
 
-@bp.route("/<int:group_id>/join", methods=["POST"])
-def request_join_group(group_id: int):
-    """
-    PUBLIC GROUPS: create a join request via RequestJoinPublicGroup.
-
-    Body JSON: { "user_id": 1005 }
-    """
-    data = request.get_json(silent=True) or {}
-    user_id = data.get("user_id")
-
+@router.post("/{group_id}/join", status_code=status.HTTP_201_CREATED, response_model=dict)
+def request_join_group(group_id: int, user_id: int = Query(...)):
+    """Join a public group via RequestJoinPublicGroup."""
     if not user_id:
-        return jsonify({"detail": "Missing field: user_id"}), 400
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="user_id is required",
+        )
 
     conn = None
     cursor = None
@@ -97,41 +81,39 @@ def request_join_group(group_id: int):
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        try:
-            cursor.callproc("RequestJoinPublicGroup", (group_id, int(user_id)))
-            conn.commit()
-        except MySQLError as e:
-            conn.rollback()
-            msg = str(e)
-            if "GROUP_NOT_FOUND" in msg:
-                return jsonify({"detail": "Group not found"}), 404
-            if "GROUP_IS_PRIVATE" in msg:
-                return jsonify({
-                    "detail": "This is a private group. Use an invite code to join."
-                }), 403
-            if "ALREADY_MEMBER" in msg:
-                return jsonify({"detail": "User already a member"}), 409
-            if "REQUEST_PENDING" in msg:
-                return jsonify({
-                    "status": "request_pending",
-                    "message": "You already have a pending join request for this group."
-                }), 409
-            if "REQUEST_APPROVED" in msg:
-                return jsonify({
-                    "status": "already_approved",
-                    "message": "You have already been approved for this group."
-                }), 409
-            return jsonify({"detail": msg}), 500
+        cursor.callproc("RequestJoinPublicGroup", (group_id, int(user_id)))
+        conn.commit()
 
-        return jsonify({
+        return {
             "status": "request_created",
-            "message": "Join request sent to the group owner."
-        }), 201
+            "message": "Join request sent to the group owner.",
+        }
 
     except MySQLError as e:
         if conn is not None:
             conn.rollback()
-        return jsonify({"detail": str(e)}), 500
+        msg = str(e)
+        
+        if "GROUP_NOT_FOUND" in msg:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Group not found",
+            )
+        elif "GROUP_IS_PRIVATE" in msg:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This is a private group. Use an invite code to join.",
+            )
+        elif "ALREADY_MEMBER" in msg:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="User already a member",
+            )
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=msg,
+        )
 
     finally:
         if cursor is not None:
@@ -139,18 +121,15 @@ def request_join_group(group_id: int):
         if conn is not None:
             conn.close()
 
-@bp.route("/public", methods=["GET"])
-def get_public_groups():
-    """
-    Returns public groups for a course, ordered by last_session + member count.
-    Wraps the GetPublicGroupsForCourse stored procedure.
-    Query params: ?course_id=420&limit=20
-    """
-    course_id = request.args.get("course_id", type=int)
-    limit = request.args.get("limit", default=20, type=int)
 
+@router.get("/public", response_model=list[dict])
+def get_public_groups(course_id: int = Query(...), limit: int = Query(20, ge=1, le=100)):
+    """Get public groups for a course."""
     if not course_id:
-        return jsonify({"detail": "Missing course_id"}), 400
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="course_id is required",
+        )
 
     conn = None
     cursor = None
@@ -168,10 +147,7 @@ def get_public_groups():
             col_names = result.column_names
             for row in rows:
                 row_dict = dict(zip(col_names, row))
-
-                raw_members = row_dict.get("members")
-                safe_members = raw_members if raw_members is not None else 0
-
+                safe_members = row_dict.get("members") or 0
                 groups.append(
                     {
                         "group_id": row_dict["group_id"],
@@ -182,10 +158,13 @@ def get_public_groups():
                     }
                 )
 
-        return jsonify(groups), 200
+        return groups
 
     except MySQLError as e:
-        return jsonify({"detail": str(e)}), 500
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
 
     finally:
         if cursor is not None:
@@ -194,16 +173,14 @@ def get_public_groups():
             conn.close()
 
 
-@bp.route("/mine", methods=["GET"])
-def get_my_groups():
-    """
-    Returns all groups a user belongs to, with their role.
-    Wraps GetUserGroups(p_user_id).
-    Query param: ?user_id=1005
-    """
-    user_id = request.args.get("user_id", type=int)
+@router.get("/mine", response_model=list[dict])
+def get_my_groups(user_id: int = Query(...)):
+    """Get all groups a user belongs to."""
     if not user_id:
-        return jsonify({"detail": "Missing user_id"}), 400
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="user_id is required",
+        )
 
     conn = None
     cursor = None
@@ -231,10 +208,13 @@ def get_my_groups():
                     }
                 )
 
-        return jsonify(groups), 200
+        return groups
 
     except MySQLError as e:
-        return jsonify({"detail": str(e)}), 500
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
 
     finally:
         if cursor is not None:
@@ -242,9 +222,6 @@ def get_my_groups():
         if conn is not None:
             conn.close()
 
-
-@bp.route("/sessions/upcoming", methods=["GET"])
-def get_upcoming_sessions():
     """
     Wraps GetUpcomingSessionsForUser.
     Query: ?user_id=...&limit=50
