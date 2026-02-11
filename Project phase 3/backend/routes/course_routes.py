@@ -1,17 +1,18 @@
 # Jacob Craig
 
-from flask import Blueprint, request, jsonify
+from fastapi import APIRouter, HTTPException, status, Query
 from mysql.connector import Error as MySQLError
 from db import get_db_connection
+from models import Course
 
-bp = Blueprint("courses", __name__, url_prefix="/courses")
+router = APIRouter()
 
 
-@bp.route("/search", methods=["GET"])
-def search_courses():
+@router.get("/search", response_model=list[dict])
+def search_courses(q: str = Query("", min_length=2, max_length=100), limit: int = Query(8, ge=1, le=50)):
     """
     Smart search over course_code / course_name.
-
+    
     Query params:
       ?q=cos 420&limit=8
 
@@ -26,12 +27,9 @@ def search_courses():
         ...
       ]
     """
-    q = (request.args.get("q") or "").strip()
-    limit = request.args.get("limit", default=8, type=int)
-
     if len(q) < 2:
         # too short – avoid spamming DB
-        return jsonify([]), 200
+        return []
 
     conn = None
     cursor = None
@@ -56,13 +54,17 @@ def search_courses():
                     }
                 )
 
-        return jsonify(results), 200
+        return results
 
     except MySQLError as e:
-        return jsonify({"detail": str(e)}), 500
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
 
     finally:
         if cursor is not None:
             cursor.close()
         if conn is not None:
             conn.close()
+

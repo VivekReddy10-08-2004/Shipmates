@@ -1,24 +1,17 @@
-#Jacob Craig
+# Jacob Craig
 
-from flask import Blueprint, request, jsonify, current_app
+from fastapi import APIRouter, HTTPException, status, Query, UploadFile, File
 from mysql.connector import Error as MySQLError
 from db import get_db_connection
-from werkzeug.utils import secure_filename
-import os
 import uuid
+import os
 
-bp = Blueprint("match", __name__)
+router = APIRouter()
 
 
-@bp.route("/match/profile", methods=["GET"])
-def get_match_profile():
-    """
-    Fetch existing StudyBuddy Match profile + courses for a user.
-    """
-    user_id = request.args.get("user_id", type=int)
-    if not user_id:
-        return jsonify({"detail": "user_id is required"}), 400
-
+@router.get("/profile", response_model=dict)
+def get_match_profile(user_id: int = Query(...)):
+    """Fetch existing StudyBuddy Match profile + courses for a user."""
     conn = None
     cur = None
 
@@ -26,21 +19,12 @@ def get_match_profile():
         conn = get_db_connection()
         cur = conn.cursor(dictionary=True)
 
-        # main profile
         cur.execute(
             """
             SELECT
-              user_id,
-              study_style,
-              meeting_pref,
-              study_goal,
-              focus_time_pref,
-              noise_pref,
-              age,
-              preferred_min_age,
-              preferred_max_age,
-              bio,
-              profile_image_url
+              user_id, study_style, meeting_pref, study_goal,
+              focus_time_pref, noise_pref, age,
+              preferred_min_age, preferred_max_age, bio, profile_image_url
             FROM Match_Profile
             WHERE user_id = %s
             """,
@@ -49,22 +33,14 @@ def get_match_profile():
         profile = cur.fetchone()
 
         if not profile:
-            # first-time user
-            return jsonify({"exists": False, "profile": None, "courses": []}), 200
+            return {"exists": False, "profile": None, "courses": []}
 
-        # selected courses
         cur.execute(
             """
-            SELECT
-              mpc.course_id,
-              c.course_code,
-              c.course_name,
-              col.college_name
+            SELECT mpc.course_id, c.course_code, c.course_name, col.college_name
             FROM Match_Profile_Course AS mpc
-            JOIN Courses AS c
-              ON c.course_id = mpc.course_id
-            LEFT JOIN Colleges AS col
-              ON col.college_id = c.college_id
+            JOIN Courses AS c ON c.course_id = mpc.course_id
+            LEFT JOIN Colleges AS col ON col.college_id = c.college_id
             WHERE mpc.user_id = %s
             ORDER BY c.course_code, c.course_name
             """,
@@ -72,16 +48,13 @@ def get_match_profile():
         )
         courses = cur.fetchall() or []
 
-        return jsonify(
-            {
-                "exists": True,
-                "profile": profile,
-                "courses": courses,
-            }
-        ), 200
+        return {"exists": True, "profile": profile, "courses": courses}
 
     except MySQLError as e:
-        return jsonify({"detail": str(e)}), 500
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
 
     finally:
         if cur is not None:
@@ -90,14 +63,102 @@ def get_match_profile():
             conn.close()
 
 
-@bp.route("/match/profile", methods=["POST"])
-def upsert_match_profile():
-    """
-    Creates/Updates a user's StudyBuddy match profile.
-    """
-    data = request.get_json(silent=True) or {}
+@router.post("/profile", response_model=dict)
+def upsert_match_profile(
+    user_id: int = Query(...),
+    study_style: str = Query(None),
+    meeting_pref: str = Query(None),
+    bio: str = Query(None),
+    study_goal: str = Query(None),
+    focus_time_pref: str = Query(None),
+    noise_pref: str = Query(None),
+    age: int = Query(None),
+    preferred_min_age: int = Query(None),
+    preferred_max_age: int = Query(None),
+):
+    """Create/Update a user's StudyBuddy match profile."""
+    conn = None
+    cur = None
 
-    user_id = data.get("user_id")
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(dictionary=True)
+
+        cur.execute(
+            "CALL UpsertMatchProfile(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (
+                user_id,
+                study_style,
+                meeting_pref,
+                bio,
+                None,  # profile_image_url
+                study_goal,
+                focus_time_pref,
+                noise_pref,
+                age,
+                preferred_min_age,
+                preferred_max_age,
+            ),
+        )
+
+        while cur.nextset():
+            pass
+
+        conn.commit()
+
+        return {"status": "ok"}
+
+    except MySQLError as e:
+        if conn:
+            conn.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+    finally:
+        if cur is not None:
+            cur.close()
+        if conn is not None:
+            conn.close()
+
+
+@router.get("/suggestions", response_model=list[dict])
+def get_study_buddy_matches(user_id: int = Query(...), limit: int = Query(20, ge=1, le=50)):
+    """Get match suggestions for a user."""
+    conn = None
+    cur = None
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(dictionary=True)
+
+        cur.execute("CALL GetStudyBuddyMatches(%s, %s)", (user_id, limit))
+        rows = cur.fetchall() or []
+
+        while cur.nextset():
+            pass
+
+        formatted = []
+        for r in rows:
+            r["shared_courses"] = int(r.get("shared_courses", 0) or 0)
+            r["match_score"] = int(r.get("match_score", 0) or 0)
+            formatted.append(r)
+
+        return formatted
+
+    except MySQLError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+    finally:
+        if cur is not None:
+            cur.close()
+        if conn is not None:
+            conn.close()
+
     study_style = data.get("study_style")
     meeting_pref = data.get("meeting_pref")
     bio = data.get("bio")

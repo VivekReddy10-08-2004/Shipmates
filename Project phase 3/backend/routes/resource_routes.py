@@ -1,18 +1,14 @@
 # Jacob Craig
+
 import os
-from flask import Blueprint, request, jsonify, session, current_app
+from fastapi import APIRouter, HTTPException, status, Query, UploadFile, File
 from db import get_db_connection
-from werkzeug.utils import secure_filename
 
-bp = Blueprint("resources", __name__)
+router = APIRouter()
 
-# basic whitelist for uploads 
-ALLOWED_RESOURCE_EXTENSIONS = {
-    "pdf",
-    "mp4",
-    "mov",
-    "mkv",
-}
+# Basic whitelist for uploads
+ALLOWED_RESOURCE_EXTENSIONS = {"pdf", "mp4", "mov", "mkv"}
+
 
 def _allowed_resource_file(filename: str) -> bool:
     if "." not in filename:
@@ -21,13 +17,10 @@ def _allowed_resource_file(filename: str) -> bool:
     return ext in ALLOWED_RESOURCE_EXTENSIONS
 
 
-@bp.route("/resources", methods=["GET"])
-def list_resources():
-    """
-    show resources for the main resources page
-    """
-    limit = request.args.get("limit", type=int)  # None if not provided
-
+# ============= LIST RESOURCES =============
+@router.get("", response_model=list[dict])
+def list_resources(limit: int = Query(None)):
+    """List resources for the main resources page."""
     conn = get_db_connection()
     cur = conn.cursor(dictionary=True)
 
@@ -35,12 +28,7 @@ def list_resources():
         if not limit or limit <= 0:
             cur.execute(
                 """
-                SELECT resource_id,
-                       title,
-                       description,
-                       filetype,
-                       source,
-                       upload_date
+                SELECT resource_id, title, description, filetype, source, upload_date
                 FROM Resource
                 ORDER BY resource_id ASC
                 """
@@ -52,35 +40,33 @@ def list_resources():
             for result in cur.stored_results():
                 rows.extend(result.fetchall())
 
-        return jsonify(rows), 200
+        return rows
 
     except Exception as e:
-        print("Error in /resources GET:", e)
-        return jsonify({"error": "Failed to fetch resources"}), 500
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch resources",
+        )
     finally:
         cur.close()
         conn.close()
 
 
-@bp.route("/resources", methods=["POST"])
-def create_resource():
-    """
-    create a new resource that points at a URL (link / video on another site)
-    """
-    user = session.get("user")
-    if not user:
-        return jsonify({"error": "Not logged in"}), 401
-
-    user_id = user["user_id"]
-
-    data = request.get_json() or {}
-    title = (data.get("title") or "").strip()
-    description = (data.get("description") or "").strip()
-    url = (data.get("url") or "").strip()
-    filetype = (data.get("filetype") or "").strip().upper()  # LINK / VIDEO / etc.
-
+# ============= CREATE RESOURCE =============
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=dict)
+def create_resource(
+    title: str = Query(...),
+    description: str = Query(None),
+    url: str = Query(...),
+    filetype: str = Query(...),
+    uploader_id: int = Query(...),
+):
+    """Create a new resource that points at a URL."""
     if not title or not url or not filetype:
-        return jsonify({"error": "title, url, and filetype are required"}), 400
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="title, url, and filetype are required",
+        )
 
     conn = get_db_connection()
     cur = conn.cursor(dictionary=True)
@@ -91,13 +77,120 @@ def create_resource():
             INSERT INTO Resource (uploader_id, title, description, filetype, source, upload_date)
             VALUES (%s, %s, %s, %s, %s, NOW())
             """,
-            (user_id, title, description, filetype, url),
+            (uploader_id, title, description or None, filetype.upper(), url),
         )
         resource_id = cur.lastrowid
 
         cur.execute(
             """
-            SELECT resource_id,
+            SELECT resource_id, title, description, filetype, source, upload_date
+            FROM Resource
+            WHERE resource_id = %s
+            """,
+            (resource_id,),
+        )
+        resource = cur.fetchone()
+
+        conn.commit()
+
+        return resource
+
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+    finally:
+        cur.close()
+        conn.close()
+
+
+# ============= GET SINGLE RESOURCE =============
+@router.get("/{resource_id}", response_model=dict)
+def get_resource(resource_id: int):
+    """Get a single resource by ID."""
+    conn = get_db_connection()
+    cur = conn.cursor(dictionary=True)
+
+    try:
+        cur.execute(
+            """
+            SELECT resource_id, title, description, filetype, source, upload_date
+            FROM Resource
+            WHERE resource_id = %s
+            """,
+            (resource_id,),
+        )
+        resource = cur.fetchone()
+
+        if not resource:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Resource not found",
+            )
+
+        return resource
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+    finally:
+        cur.close()
+        conn.close()
+
+
+# ============= DELETE RESOURCE =============
+@router.delete("/{resource_id}", status_code=status.HTTP_200_OK, response_model=dict)
+def delete_resource(resource_id: int, uploader_id: int = Query(...)):
+    """Delete a resource (owner only)."""
+    conn = get_db_connection()
+    cur = conn.cursor(dictionary=True)
+
+    try:
+        # Verify ownership
+        cur.execute(
+            "SELECT uploader_id FROM Resource WHERE resource_id = %s",
+            (resource_id,),
+        )
+        resource = cur.fetchone()
+
+        if not resource:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Resource not found",
+            )
+
+        if resource["uploader_id"] != uploader_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only delete your own resources",
+            )
+
+        cur.execute("DELETE FROM Resource WHERE resource_id = %s", (resource_id,))
+        conn.commit()
+
+        return {"message": "Resource deleted successfully"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+    finally:
+        cur.close()
+        conn.close()
+
                    title,
                    description,
                    filetype,

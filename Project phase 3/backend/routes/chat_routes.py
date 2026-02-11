@@ -1,23 +1,20 @@
-# Jacob Craig 
+# Jacob Craig
 
-from flask import Blueprint, request, jsonify
+from fastapi import APIRouter, HTTPException, status, Query
 from mysql.connector import Error as MySQLError
 from datetime import datetime
-
 from db import get_db_connection
+from models import ChatMessage, ChatMessageResponse
 
-bp = Blueprint("chat", __name__, url_prefix="/groups")
+router = APIRouter()
 
 
-@bp.route("/<int:group_id>/chat", methods=["GET"])
-def get_chat_messages(group_id: int):
+@router.get("/{group_id}/chat", response_model=list[ChatMessageResponse])
+def get_chat_messages(group_id: int, limit: int = Query(50, ge=1, le=500)):
     """
     Returns latest chat messages for a group.
     Wraps GetChatMessagesForGroup stored procedure.
-    Query param: ?limit=50
     """
-    limit = request.args.get("limit", default=50, type=int)
-
     conn = None
     cursor = None
 
@@ -31,7 +28,7 @@ def get_chat_messages(group_id: int):
 
         for result in cursor.stored_results():
             rows = result.fetchall()
-            col_names = result.column_names  # ['message_id','user_id','content','sent_time']
+            col_names = result.column_names
             for row in rows:
                 row_dict = dict(zip(col_names, row))
                 sent = row_dict["sent_time"]
@@ -46,10 +43,13 @@ def get_chat_messages(group_id: int):
                     }
                 )
 
-        return jsonify(messages), 200
+        return messages
 
     except MySQLError as e:
-        return jsonify({"detail": str(e)}), 500
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
 
     finally:
         if cursor is not None:
@@ -58,18 +58,16 @@ def get_chat_messages(group_id: int):
             conn.close()
 
 
-@bp.route("/<int:group_id>/chat", methods=["POST"])
-def post_chat_message(group_id: int):
+@router.post("/{group_id}/chat", response_model=dict, status_code=status.HTTP_201_CREATED)
+def post_chat_message(group_id: int, message: ChatMessage):
     """
-    Inserts a new chat message via AddChatMessage.
-    Body JSON: { "user_id": 1005, "content": "hello" }
+    Inserts a new chat message via AddChatMessage stored procedure.
     """
-    data = request.get_json(silent=True) or {}
-    user_id = data.get("user_id")
-    content = (data.get("content") or "").strip()
-
-    if not user_id or not content:
-        return jsonify({"detail": "user_id and content are required"}), 400
+    if not message.user_id or not message.content.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="user_id and content are required",
+        )
 
     conn = None
     cursor = None
@@ -79,7 +77,7 @@ def post_chat_message(group_id: int):
         cursor = conn.cursor()
 
         # CALL AddChatMessage(p_group_id, p_user_id, p_content)
-        cursor.callproc("AddChatMessage", (group_id, int(user_id), content))
+        cursor.callproc("AddChatMessage", (group_id, message.user_id, message.content.strip()))
 
         message_id = None
         for result in cursor.stored_results():
@@ -91,17 +89,24 @@ def post_chat_message(group_id: int):
         conn.commit()
 
         if message_id is None:
-            return jsonify({"detail": "Failed to create message"}), 500
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create message",
+            )
 
-        return jsonify({"message_id": message_id}), 201
+        return {"message_id": message_id}
 
     except MySQLError as e:
         if conn is not None:
             conn.rollback()
-        return jsonify({"detail": str(e)}), 500
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
 
     finally:
         if cursor is not None:
             cursor.close()
         if conn is not None:
             conn.close()
+
