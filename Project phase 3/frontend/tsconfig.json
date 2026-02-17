@@ -25,7 +25,8 @@
     "exactOptionalPropertyTypes": true,
 
     // Style Options
-    "noImplicitAny": false, // this might be a bad idea for security reasons, but whatever its fine for now just so the autofix works - Rise
+    // TODO: Maybe change all the "any" implicit types in the api files to actually have their proper types.
+    "noImplicitAny": false, // this might be a bad idea for type safety reasons, but whatever its fine for now since I don't know all the types. - Rise
     // "noImplicitReturns": true,
     // "noImplicitOverride": true,
     // "noUnusedLocals": true,

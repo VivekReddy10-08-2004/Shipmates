@@ -4,11 +4,11 @@ import { useEffect, useState, useRef } from "react";
 import { getChatMessages, sendChatMessage } from "../api/chat.js";
 
 export default function ChatPage({ groupId, groupName, userId, onBack }) {
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const bottomRef = useRef(null);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const loadMessages = async () => {
     setError("");
