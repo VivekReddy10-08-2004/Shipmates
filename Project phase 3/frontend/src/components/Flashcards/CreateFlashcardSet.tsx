@@ -1,22 +1,31 @@
 import React, { useState } from "react";
-import { createFlashcardSet } from "../../api/flashcards";
+import { createFlashcardSet, type Flashcard } from "../../api/flashcards.js";
 
 export default function CreateFlashcardSet({ onSetCreated }) {
   const [title, setTitle] = useState("");
   const [creatorId, setCreatorId] = useState(1); // default for testing
   const [cards, setCards] = useState([{ front: "", back: "" }]);
-  const [status, setStatus] = useState(null);
 
-  const updateCard = (idx, key, value) => {
+  type StatusType = {
+    type: "info" | "success" | "error";
+    text: string;
+  };
+
+  const [status, setStatus] = useState<StatusType | null>(null);
+
+  const updateCard = (idx: number, key: keyof Flashcard, value: any) => {
     const next = [...cards];
-    next[idx][key] = value;
-    setCards(next);
+    const card = next[idx];
+    if (card) { // Had to add a check for undefined object
+      card[key] = value;
+      setCards(next);
+    }
   };
 
   const addCard = () => setCards((c) => [...c, { front: "", back: "" }]);
 
   const submit = async () => {
-    setStatus({ type: "info", text: "Saving..." });
+    setStatus({ type: "info", text: "Saving..." }); // need to specify a known type (ie, StatusType) - Rise
     try {
       const payload = { title, creator_id: creatorId, flashcards: cards.map(c => ({ front: c.front, back: c.back })) };
       const res = await createFlashcardSet(payload);
@@ -27,9 +36,20 @@ export default function CreateFlashcardSet({ onSetCreated }) {
       if (onSetCreated) {
         onSetCreated();
       }
-    } catch (e) {
-      // e may be a string or an object from axios interceptor
-      const text = typeof e === 'string' ? e : (e?.error || e?.message || JSON.stringify(e));
+    } catch (e: unknown) { 
+      let text: string;
+
+      if (typeof e === "string") {
+        text = e;
+      } else if (e && typeof e === "object" && "error" in e) {
+        // TypeScript now knows e has 'error'
+        text = (e as { error?: string }).error || JSON.stringify(e);
+      } else if (e && typeof e === "object" && "message" in e) {
+        text = (e as { message?: string }).message || JSON.stringify(e);
+      } else {
+        text = JSON.stringify(e);
+      }
+
       setStatus({ type: "error", text });
     }
   };

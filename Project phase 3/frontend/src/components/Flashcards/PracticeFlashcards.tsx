@@ -1,24 +1,24 @@
-import React, { useEffect, useState, forwardRef, useImperativeHandle } from "react";
-import { listFlashcardSets, getFlashcardSet, deleteFlashcardSet, updateFlashcardSet, updateFlashcard, deleteFlashcard } from "../../api/flashcards";
+import { useEffect, useState, forwardRef, useImperativeHandle } from "react";
+import { listFlashcardSets, getFlashcardSet, deleteFlashcardSet, updateFlashcardSet, updateFlashcard, deleteFlashcard, type Flashcard, type FlashcardSet } from "../../api/flashcards.js";
 
 const PracticeFlashcards = forwardRef((props, ref) => {
-  const [sets, setSets] = useState([]);
-  const [selected, setSelected] = useState(null);
+  const [sets, setSets] = useState<Flashcard[]>([]);
+  const [selected, setSelected] = useState<FlashcardSet | null>(null);
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null); // Needed, since "string" isn't assignable to the parameter of type 'SetStateAction<null>' - Rise
   const [editingSetId, setEditingSetId] = useState(null);
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [editMode, setEditMode] = useState("set"); // "set" or "cards"
-  const [cardsData, setCardsData] = useState([]); // for editing cards
+  const [cardsData, setCardsData] = useState<Flashcard[]>([]); // for editing cards // explicitly defined using Flashcard - Rise
   const [editingCardId, setEditingCardId] = useState(null);
   const [editCardFront, setEditCardFront] = useState("");
   const [editCardBack, setEditCardBack] = useState("");
-  const [deleteCardId, setDeleteCardId] = useState(null);
+  const [deleteCardId, setDeleteCardId] = useState<number | null>(null); // Needed, since "number" isn't assignable to the parameter of type 'SetStateAction<null>' - Rise
 
   const reloadSets = () => {
     setLoading(true);
@@ -601,7 +601,7 @@ const PracticeFlashcards = forwardRef((props, ref) => {
                 Edit
               </button>
               <button
-                onClick={() => setShowDeleteConfirm(s.id)}
+                onClick={() => setShowDeleteConfirm(s.id as number)}
                 style={{
                   padding: '0.4rem 0.8rem',
                   borderRadius: '0.4rem',

@@ -7,7 +7,7 @@ import LevelUpIcon from "../assets/levelup.png";
 import NetworkIcon from "../assets/Network.png";
 import MatcherIcon from "../assets/matcher.png";
 
-import useCurrentUser from "../hooks/useCurrentUser";
+import useCurrentUser from "../hooks/useCurrentUser.js";
 import { fetchMyGroups, fetchUpcomingSessions } from "../api/studygroups.js";
 
 export default function HomePage() {
