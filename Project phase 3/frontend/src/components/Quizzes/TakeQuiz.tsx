@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from "react";
-import { listQuizzes, getQuiz, submitQuiz } from "../../api/quizzes";
+import { listQuizzes, getQuiz, submitQuiz, type Quiz, type Score } from "../../api/quizzes.js";
 
 export default function TakeQuiz() {
-  const [quizzes, setQuizzes] = useState([]);
-  const [selectedQuiz, setSelectedQuiz] = useState(null);
+  const [quizzes, setQuizzes] = useState<Quiz[]>([]);
+  const [selectedQuiz, setSelectedQuiz] = useState<Quiz | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const [answers, setAnswers] = useState({});
   const [submitted, setSubmitted] = useState(false);
-  const [score, setScore] = useState(null);
+  const [score, setScore] = useState<Score | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -28,7 +28,7 @@ export default function TakeQuiz() {
       setAnswers({});
       const quiz = await getQuiz(quizId);
       setSelectedQuiz(quiz);
-    } catch (err) {
+    } catch (err : unknown) {
       setError(typeof err === 'string' ? err : 'Failed to load quiz');
     }
   };
@@ -41,6 +41,11 @@ export default function TakeQuiz() {
   };
 
   const handleSubmit = async () => {
+    if (!selectedQuiz) { // needed, since selectedQuiz is possibly null
+      setError("No quiz selected");
+      return;
+    }
+
     try {
       setError(null);
       const result = await submitQuiz({
@@ -84,12 +89,14 @@ export default function TakeQuiz() {
                 transition: "all 0.2s ease",
               }}
               onMouseEnter={(e) => {
-                e.target.style.background = "rgba(14,165,233,0.2)";
-                e.target.style.borderColor = "rgba(14,165,233,0.5)";
+                const target = e.target as HTMLElement; // needs to be cast as an HTMLElement - Rise
+                target.style.background = "rgba(14,165,233,0.2)";
+                target.style.borderColor = "rgba(14,165,233,0.5)";
               }}
               onMouseLeave={(e) => {
-                e.target.style.background = "rgba(14,165,233,0.1)";
-                e.target.style.borderColor = "rgba(148,163,184,0.3)";
+                const target = e.target as HTMLElement;
+                target.style.background = "rgba(14,165,233,0.1)";
+                target.style.borderColor = "rgba(148,163,184,0.3)";
               }}
             >
               <strong>{q.title}</strong>

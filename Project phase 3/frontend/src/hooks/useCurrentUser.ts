@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { API_BASE } from "../api/base";
+import { API_BASE } from "../api/base.js";
 
 export default function useCurrentUser() {
   const [user, setUser] = useState(null);
@@ -28,7 +28,12 @@ export default function useCurrentUser() {
       } catch (err) {
         if (!cancelled) {
           setUser(null);
-          setError(err.message || "Failed to load user");
+          if (err instanceof Error){  // had to add a check here, since it doesn't like it when err is unknown - Rise
+            setError(err.message);
+          }
+          else {
+            setError("Failed to load user");
+          }
         }
       } finally {
         if (!cancelled) setLoading(false);

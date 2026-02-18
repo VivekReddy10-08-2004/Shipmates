@@ -3,8 +3,8 @@ import {
   fetchResources as apiFetchResources,
   createResource as apiCreateResource,
   uploadResourceFile as apiUploadResourceFile,
-} from "../api/resources";
-import { API_BASE } from "../api/base";
+} from "../api/resources.js";
+import { API_BASE } from "../api/base.js";
 
 export default function ResourcesPage() {
   const [resources, setResources] = useState([]);

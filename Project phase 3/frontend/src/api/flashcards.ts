@@ -1,7 +1,29 @@
+import type { Key } from "react";
 import client from "./axiosClient.js";
 
 const API_PREFIX = "/flashcards";
 
+// create flashcard type to reference later - Rise
+// No idea if any of these types are right. Most of them came from quickfix, so change them later if needed.
+export type Flashcard = {
+  description: any;
+  title: string;
+  id: Key | null | undefined;
+  back: string;
+  front: string;
+  flashcard_id: number;
+  front_text: string;
+  back_text: string;
+  set_id: number;
+};
+
+export type FlashcardSet = {
+  reloadSets(): unknown;
+  id: Key | null | undefined;
+  title: string;
+  description: string;
+  cards: Flashcard[];  
+};
 /**
  * Create a flashcard set
  * @param {{title: string, course_id?: number, flashcards: Array<{front:string,back:string}>}} data

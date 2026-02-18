@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import CreateQuiz from "../components/Quizzes/CreateQuiz";
-import TakeQuiz from "../components/Quizzes/TakeQuiz";
+import CreateQuiz from "../components/Quizzes/CreateQuiz.js";
+import TakeQuiz from "../components/Quizzes/TakeQuiz.js";
 
 export default function QuizzesPage() {
   const [tab, setTab] = useState("take");

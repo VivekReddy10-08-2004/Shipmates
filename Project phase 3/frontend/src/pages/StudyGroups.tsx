@@ -18,9 +18,9 @@ import {
   searchCourses,
 } from "../api/studygroups.js";
 
-import ChatPage from "./ChatPage";
+import ChatPage from "./ChatPage.js";
 import CheckJoinIcon from "../assets/CheckJoin.png";
-import { API_BASE } from "../api/base";
+import { API_BASE } from "../api/base.js";
 
 export default function StudyGroups() {
   const [currentUser, setCurrentUser] = useState(null);

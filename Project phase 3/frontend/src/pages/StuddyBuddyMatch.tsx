@@ -12,9 +12,9 @@ import {
   fetchInbox,
   fetchMessageRequests,
   respondToMessageRequest,
-} from "../api/match";
-import { searchCourses } from "../api/studygroups";
-import { API_BASE } from "../api/base";
+} from "../api/match.js";
+import { searchCourses } from "../api/studygroups.js";
+import { API_BASE } from "../api/base.js";
 
 export default function StudyBuddyMatch() {
   // 🔐 Logged-in user

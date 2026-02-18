@@ -11,7 +11,11 @@ async function apiFetch(path: string, options = {}) {
     ...options,
   });
 
-  let data: { detail?: string } = {};
+  let data: {
+    courses: never[];
+    exists: { profile: any; detail?: string; };
+    profile: any; detail?: string 
+} = {};
   try {
     data = await res.json();
   } catch {

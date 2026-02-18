@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { fetchColleges, fetchMajors, logoutUser} from "../api/auth.js"; // all methods from the api go here
-import { API_BASE } from "../api/base";
+import { API_BASE } from "../api/base.js";
 
 export function AccountPage() {
   const [user, setUser] = useState(null);

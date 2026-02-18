@@ -1,21 +1,26 @@
 import React, { useState } from "react";
-import { createQuiz } from "../../api/quizzes";
+import { createQuiz } from "../../api/quizzes.js";
 
 export default function CreateQuiz() {
   const [title, setTitle] = useState("");
   const [questions, setQuestions] = useState([{ text: "", answers: [{ text: "", is_correct: false }] }]);
-  const [status, setStatus] = useState(null);
+  const [status, setStatus] = useState<string | null>(null);
 
-  const updateQuestion = (qi, key, val) => {
+  const updateQuestion = (qi: number, key: string, val: any) => {
     const next = [...questions];
-    next[qi][key] = val;
-    setQuestions(next);
+    if (next[qi]) { // need to check if it actually exists - Rise
+      next[qi][key] = val;
+      setQuestions(next);
+    }
   };
+
 
   const addAnswer = (qi) => {
     const next = [...questions];
-    next[qi].answers.push({ text: "", is_correct: false });
-    setQuestions(next);
+    if (next[qi]) { // need to check if it actually exists - Rise
+      next[qi].answers.push({ text: "", is_correct: false });
+      setQuestions(next);
+    }
   };
 
   const submit = async () => {
@@ -41,14 +46,18 @@ export default function CreateQuiz() {
               <div key={ai}>
                 <input placeholder={`Answer ${ai + 1}`} value={a.text} onChange={(e) => {
                   const next = [...questions];
-                  next[qi].answers[ai].text = e.target.value;
-                  setQuestions(next);
+                  if (next[qi]?.answers[ai]) { // need to check if it actually exists - Rise
+                    next[qi].answers[ai].text = e.target.value;
+                    setQuestions(next);
+                  }
                 }} />
                 <label>
                   <input type="checkbox" checked={a.is_correct} onChange={(e) => {
                     const next = [...questions];
-                    next[qi].answers[ai].is_correct = e.target.checked;
-                    setQuestions(next);
+                    if (next[qi]?.answers[ai]) {
+                      next[qi].answers[ai].is_correct = e.target.checked;
+                      setQuestions(next);
+                    }
                   }} /> Correct
                 </label>
               </div>
