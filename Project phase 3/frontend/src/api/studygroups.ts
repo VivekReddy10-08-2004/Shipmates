@@ -7,6 +7,11 @@ import { API_BASE } from "./base.js";
 export interface Session { // change types as needed - Rise
   location: string;
   group_name: string;
+  session_date: any;
+}
+
+export interface Group {
+  
 }
 
 // small helper to standardize fetch + error handling
