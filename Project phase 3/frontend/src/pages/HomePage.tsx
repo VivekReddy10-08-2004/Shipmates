@@ -8,7 +8,7 @@ import NetworkIcon from "../assets/Network.png";
 import MatcherIcon from "../assets/matcher.png";
 
 import useCurrentUser from "../hooks/useCurrentUser.js";
-import { fetchMyGroups, fetchUpcomingSessions } from "../api/studygroups.js";
+import { fetchMyGroups, fetchUpcomingSessions, type Session } from "../api/studygroups.js";
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -17,7 +17,7 @@ export default function HomePage() {
   const userId = user?.user_id ?? null;
 
   const [activeGroups, setActiveGroups] = useState(0);
-  const [nextSession, setNextSession] = useState(null);
+  const [nextSession, setNextSession] = useState<Session | null>(null);
   const [streakDays, setStreakDays] = useState(0);
 
   // ---- simple streak tracker (per user, stored in localStorage) ----
@@ -46,7 +46,7 @@ export default function HomePage() {
           newCount = prevCount;
         } else {
           const last = new Date(lastDate);
-          const diffMs = today - last;
+          const diffMs = today.getTime() - last.getTime(); // needed to add getTime() - Rise
           const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
           if (diffDays === 1) {
@@ -255,11 +255,11 @@ export default function HomePage() {
       >
         <div className="feature-grid-header">
           <h2 className="feature-grid-title">Choose your path</h2>
-          <p2 className="feature-grid-subtitle">
+          <p className="feature-grid-subtitle"> {/*p2 doesn't exist, so had to change it to jsut p - Rise*/}
             We offer many features in StudyBuddy. You can create your owner
             quizzes or flashcards, use our study tools, find or create a study
             group, or find the perfect sutdy partner on StudyBuddy Match!
-          </p2>
+          </p>
         </div>
 
         <div className="feature-grid">

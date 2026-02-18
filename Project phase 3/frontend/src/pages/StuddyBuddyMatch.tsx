@@ -12,13 +12,18 @@ import {
   fetchInbox,
   fetchMessageRequests,
   respondToMessageRequest,
+  type Match,
+  type Message,
+  type MessageRequest,
 } from "../api/match.js";
 import { searchCourses } from "../api/studygroups.js";
 import { API_BASE } from "../api/base.js";
+import { type Course, type College, type User } from "../hooks/useCurrentUser.js";
+import { type Conversation } from "../api/match.js";
 
 export default function StudyBuddyMatch() {
   // 🔐 Logged-in user
-  const [currentUser, setCurrentUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
 
   // Match profile
@@ -33,15 +38,15 @@ export default function StudyBuddyMatch() {
     age: "",
   });
 
-  const [selectedCourses, setSelectedCourses] = useState([]);
+  const [selectedCourses, setSelectedCourses] = useState<College[]>([]);
   const [courseQuery, setCourseQuery] = useState("");
-  const [courseResults, setCourseResults] = useState([]);
+  const [courseResults, setCourseResults] = useState<Course[]>([]);
 
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isLoadingMatches, setIsLoadingMatches] = useState(false);
 
-  const [matches, setMatches] = useState([]);
+  const [matches, setMatches] = useState<Match[]>([]);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
 
@@ -50,17 +55,17 @@ export default function StudyBuddyMatch() {
   const [initialized, setInitialized] = useState(false);
 
   // DM state
-  const [activeConversation, setActiveConversation] = useState(null); // { conversation_id, partner, ... }
-  const [dmMessages, setDmMessages] = useState([]);
+  const [activeConversation, setActiveConversation] = useState<Conversation | null>(null); // { conversation_id, partner, ... }
+  const [dmMessages, setDmMessages] = useState<Message[]>([]);
   const [dmInput, setDmInput] = useState("");
   const [isLoadingChat, setIsLoadingChat] = useState(false);
 
   const [showChatDock, setShowChatDock] = useState(false);
-  const [inbox, setInbox] = useState([]); // conversations
-  const [requests, setRequests] = useState([]); // message requests
+  const [inbox, setInbox] = useState<Conversation[]>([]); // conversations
+  const [requests, setRequests] = useState<MessageRequest>([]); // message requests
   const [isLoadingInbox, setIsLoadingInbox] = useState(false);
 
-  const [selectedMatch, setSelectedMatch] = useState(null); // profile popup
+  const [selectedMatch, setSelectedMatch] = useState<Match | null>(null); // profile popup
 
   // ---------------------------
   // 1) Load logged-in user
@@ -104,6 +109,8 @@ export default function StudyBuddyMatch() {
     if (!currentUser || !currentUser.user_id) return;
 
     async function init() {
+      if (!currentUser) 
+        return; // null check needed for quick fix - Rise
       try {
         const data = await fetchMatchProfile(currentUser.user_id);
 
@@ -134,7 +141,8 @@ export default function StudyBuddyMatch() {
         }
       } catch (err) {
         console.error(err);
-        setError(err.message || "Failed to load profile");
+        if (err instanceof Error) // added error check
+          setError(err.message || "Failed to load profile");
       } finally {
         setInitialized(true);
       }
@@ -175,7 +183,8 @@ export default function StudyBuddyMatch() {
       const results = await searchCourses(trimmed, 8);
       setCourseResults(results);
     } catch (err) {
-      setError(err.message || "Failed to search courses");
+      if (err instanceof Error) // added error check - Rise
+        setError(err.message || "Failed to search courses");
     }
   }
 
@@ -218,7 +227,8 @@ export default function StudyBuddyMatch() {
       setInfo("Profile image uploaded.");
     } catch (err) {
       console.error(err);
-      setError(err.message || "Failed to upload image");
+      if (err instanceof Error) // added check -Rise
+        setError(err.message || "Failed to upload image");
     } finally {
       setIsUploading(false);
     }
@@ -245,15 +255,14 @@ export default function StudyBuddyMatch() {
     setIsLoadingChat(true);
 
     try {
-      const msgs = await fetchDirectMessages(convo.conversation_id, 50);
+      const response = await fetchDirectMessages(convo.conversation_id, 50);
+      const msgs = (await fetchDirectMessages(convo.conversation_id, 50)) as any[]; // extract array here
 
       const requestStatus = convo.request_status || "accepted";
       const isRequestFlow = requestStatus === "pending";
       const isYouRequester = convo.is_requester === 1;
 
-      const youAlreadySent = (msgs || []).some(
-        (m) => m.sender_user_id === userId
-      );
+      const youAlreadySent = msgs.some((m) => m.sender_user_id === userId);
 
       setActiveConversation({
         conversation_id: convo.conversation_id,
@@ -268,14 +277,15 @@ export default function StudyBuddyMatch() {
         hasSentInitial: isRequestFlow && isYouRequester && youAlreadySent,
       });
 
-      setDmMessages(msgs || []);
+      setDmMessages(msgs);
     } catch (err) {
       console.error(err);
-      setError(err.message || "Failed to load conversation.");
+      if (err instanceof Error) setError(err.message || "Failed to load conversation.");
     } finally {
       setIsLoadingChat(false);
     }
   }
+
 
   // ---------------------------
   // Send DM in active conversation
@@ -344,7 +354,8 @@ export default function StudyBuddyMatch() {
       await loadInbox();
     } catch (err) {
       console.error(err);
-      setError(err.message || "Failed to send message.");
+      if (err instanceof Error)
+        setError(err.message || "Failed to send message.");
     }
   }
 
@@ -394,7 +405,8 @@ export default function StudyBuddyMatch() {
       await loadMatchesInternal(userId);
     } catch (err) {
       console.error(err);
-      setError(err.message || "Failed to save profile");
+      if (err instanceof Error)
+        setError(err.message || "Failed to save profile");
     } finally {
       setIsSaving(false);
     }
@@ -418,13 +430,14 @@ export default function StudyBuddyMatch() {
       setRequests(reqs || []);
     } catch (err) {
       console.error(err);
-      setError(err.message || "Failed to load chat.");
+      if (err instanceof Error)
+        setError(err.message || "Failed to load chat.");
     } finally {
       setIsLoadingInbox(false);
     }
   }
 
-  async function loadMatchesInternal(userIdParam) {
+  async function loadMatchesInternal(userIdParam?: number) { // changed it so the parameter is optional, since handleRefreshMatches() was complaining that parameters were missing - Rise
     const userId = userIdParam ?? currentUser?.user_id;
     if (!userId) return;
 
@@ -438,7 +451,8 @@ export default function StudyBuddyMatch() {
       }
     } catch (err) {
       console.error(err);
-      setError(err.message || "Failed to load matches");
+      if (err instanceof Error)
+        setError(err.message || "Failed to load matches");
     } finally {
       setIsLoadingMatches(false);
     }
@@ -475,7 +489,8 @@ export default function StudyBuddyMatch() {
       await loadInbox();
     } catch (err) {
       console.error(err);
-      setError(err.message || "Failed to update request.");
+      if (err instanceof Error)
+        setError(err.message || "Failed to update request.");
     }
   }
 
@@ -514,7 +529,8 @@ export default function StudyBuddyMatch() {
       setShowChatDock(true);
     } catch (err) {
       console.error(err);
-      setError(err.message || "Failed to open chat.");
+      if (err instanceof Error)
+        setError(err.message || "Failed to open chat.");
     } finally {
       setIsLoadingChat(false);
     }
@@ -1119,7 +1135,7 @@ export default function StudyBuddyMatch() {
                         >
                           <div className="group-main">
                             <span className="group-name">
-                              {c.first_name} {c.last_name}
+                              {c.partner.first_name} {c.partner.last_name} {/* Names are now store in Partner - Rise */}
                             </span>
                             <span
                               className="group-meta"
