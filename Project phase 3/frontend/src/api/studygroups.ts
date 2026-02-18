@@ -1,6 +1,13 @@
 // Jacob Craig
 
+import type { Course } from "../hooks/useCurrentUser.js";
 import { API_BASE } from "./base.js";
+
+// Interfaces
+export interface Session { // change types as needed - Rise
+  location: string;
+  group_name: string;
+}
 
 // small helper to standardize fetch + error handling
 async function apiFetch(path: string, options = {}) {
@@ -163,5 +170,6 @@ export async function searchCourses(query: any, limit = 8) {
     limit: String(limit),
   });
 
-  return apiFetch(`/courses/search?${params.toString()}`);
+  const data = await apiFetch(`/courses/search?${params.toString()}`); // had to change to await instead of return, because it didn't like me trying to apply a string to the type of Course[]- Rise
+  return data as Course[];
 }

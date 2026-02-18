@@ -1,6 +1,15 @@
 // Jacob Craig
 import client from "./axiosClient.js"; 
 
+// interfaces
+export interface Resource {
+  id: any;
+  resource_id: any;
+  title: string;
+  description: string;
+  filetype: string;
+}
+
 // GET /resources
 export async function fetchResources(limit = 0) {
   const params: { limit?: number } = {};

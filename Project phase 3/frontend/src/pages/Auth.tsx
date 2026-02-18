@@ -41,7 +41,7 @@ export function RegisterPage() {
         window.location.href = "/login";
       }, 1000);
     } 
-    catch (error: unknown) {
+    catch (error) {
       if (error instanceof Error) {
         setError(error.message);
       } 
@@ -134,7 +134,7 @@ export function LoginPage() {
       // redirect to home page immediately after successful login
       navigate("/home", { replace: true });
     } 
-    catch (error: unknown) {
+    catch (error) {
       if (error instanceof Error) {
         setError(error.message);
       } 

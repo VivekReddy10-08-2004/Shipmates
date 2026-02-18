@@ -21,9 +21,10 @@ import {
 import ChatPage from "./ChatPage.js";
 import CheckJoinIcon from "../assets/CheckJoin.png";
 import { API_BASE } from "../api/base.js";
+import { type User } from "../hooks/useCurrentUser.js";
 
 export default function StudyGroups() {
-  const [currentUser, setCurrentUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
 
   // chat state 
@@ -146,7 +147,8 @@ export default function StudyGroups() {
       }
     } catch (err) {
       console.error(err);
-      setError(err.message || "Failed to load groups");
+      if (err instanceof Error)
+        setError(err.message || "Failed to load groups");
     } finally {
       setLoading(false);
     }
@@ -275,7 +277,8 @@ export default function StudyGroups() {
       }
     } catch (err) {
       console.error(err);
-      setManageError(err.message || "Failed to load data");
+      if (err instanceof Error)
+        setManageError(err.message || "Failed to load data");
     } finally {
       setManageLoading(false);
     }
@@ -301,7 +304,8 @@ export default function StudyGroups() {
       await loadData();
     } catch (err) {
       console.error(err);
-      showToastMessage(err.message || "Failed to approve", "error");
+      if (err instanceof Error)
+        showToastMessage(err.message || "Failed to approve", "error");
     }
   };
 
@@ -315,7 +319,8 @@ export default function StudyGroups() {
       await loadManageData(manageGroup.id, "requests", manageGroup.role);
     } catch (err) {
       console.error(err);
-      showToastMessage(err.message || "Failed to reject", "error");
+      if (err instanceof Error)
+        showToastMessage(err.message || "Failed to reject", "error");
     }
   };
 
@@ -332,7 +337,8 @@ export default function StudyGroups() {
       await loadData();
     } catch (err) {
       console.error(err);
-      showToastMessage(err.message || "Failed to remove member", "error");
+      if (err instanceof Error)
+        showToastMessage(err.message || "Failed to remove member", "error");
     }
   };
 
@@ -347,7 +353,8 @@ export default function StudyGroups() {
       setInviteCodeInfo(res);
     } catch (err) {
       console.error(err);
-      setInviteCodeError(err.message || "Failed to generate invite code");
+      if (err instanceof Error)
+        setInviteCodeError(err.message || "Failed to generate invite code");
     } finally {
       setInviteCodeLoading(false);
     }
@@ -384,7 +391,8 @@ export default function StudyGroups() {
       showToastMessage("Group created!", "success");
     } catch (err) {
       console.error(err);
-      setError(err.message || "Failed to create group");
+      if (err instanceof Error)
+        setError(err.message || "Failed to create group");
       showToastMessage("Failed to create group", "error");
     }
   };
@@ -414,8 +422,10 @@ export default function StudyGroups() {
       }
     } catch (err) {
       console.error(err);
-      setError(err.message || "Failed to join group");
-      showToastMessage(err.message || "Failed to join group", "error");
+      if (err instanceof Error)
+        setError(err.message || "Failed to join group");
+      if (err instanceof Error)
+        showToastMessage(err.message || "Failed to join group", "error");
     }
   };
 
@@ -442,7 +452,8 @@ export default function StudyGroups() {
       showToastMessage("Session scheduled!", "success");
     } catch (err) {
       console.error(err);
-      setError(err.message || "Failed to create session");
+      if (err instanceof Error)
+        setError(err.message || "Failed to create session");
       showToastMessage("Failed to create session", "error");
     }
   };

@@ -3,11 +3,12 @@ import {
   fetchResources as apiFetchResources,
   createResource as apiCreateResource,
   uploadResourceFile as apiUploadResourceFile,
+  type Resource,
 } from "../api/resources.js";
 import { API_BASE } from "../api/base.js";
 
 export default function ResourcesPage() {
-  const [resources, setResources] = useState([]);
+  const [resources, setResources] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("");
@@ -17,7 +18,7 @@ export default function ResourcesPage() {
   const [newDescription, setNewDescription] = useState("");
   const [newFiletype, setNewFiletype] = useState("LINK");
   const [newSource, setNewSource] = useState(""); // URL for plain links
-  const [uploadFile, setUploadFile] = useState(null); // file input (pdf / video / other)
+  const [uploadFile, setUploadFile] = useState<File | null>(null); // file input (pdf / video / other)
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
 
@@ -30,7 +31,9 @@ export default function ResourcesPage() {
       setResources(list);
     } catch (err) {
       console.error("Error fetching resources:", err);
-      setError(err.message || "Failed to load resources");
+      if (err instanceof Error){ // added check - Rise
+        setError(err.message || "Failed to load resources");
+      }
     } finally {
       setLoading(false);
     }
@@ -81,7 +84,9 @@ export default function ResourcesPage() {
         setUploadFile(null);
       } catch (err) {
         console.error("Error uploading resource:", err);
-        setCreateError(err.message || "Failed to upload resource");
+        if (err instanceof Error){ // added check - Rise
+          setCreateError(err.message || "Failed to upload resource");
+        }
       } finally {
         setCreating(false);
       }
@@ -116,7 +121,9 @@ export default function ResourcesPage() {
       setUploadFile(null);
     } catch (err) {
       console.error("Error creating resource:", err);
-      setCreateError(err.message || "Failed to create resource");
+      if (err instanceof Error){ // Check for error - Rise
+        setCreateError(err.message || "Failed to create resource");
+      }
     } finally {
       setCreating(false);
     }
