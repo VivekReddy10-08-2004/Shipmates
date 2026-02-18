@@ -16,6 +16,8 @@ import {
   generateInviteCode,
   joinByInviteCode,
   searchCourses,
+  type Session,
+  type Group,
 } from "../api/studygroups.js";
 
 import ChatPage from "./ChatPage.js";
@@ -33,8 +35,8 @@ export default function StudyGroups() {
   // filters / data 
   const [courseId, setCourseId] = useState(null);
   const [publicGroups, setPublicGroups] = useState([]);
-  const [myGroups, setMyGroups] = useState([]);
-  const [upcomingSessions, setUpcomingSessions] = useState([]);
+  const [myGroups, setMyGroups] = useState<Group[]>([]);
+  const [upcomingSessions, setUpcomingSessions] = useState<Session[]>([]);
 
   const [courseQuery, setCourseQuery] = useState("");
   const [courseSuggestions, setCourseSuggestions] = useState([]);
@@ -135,7 +137,7 @@ export default function StudyGroups() {
         fetchMyGroups(userId),
         fetchUpcomingSessions(userId),
       ]);
-      setMyGroups(mine);
+      setMyGroups(mine); // I'm assuming "mine" is an array of groups - Rise
       setUpcomingSessions(sessions);
 
       // Only load public groups when a course is selected
