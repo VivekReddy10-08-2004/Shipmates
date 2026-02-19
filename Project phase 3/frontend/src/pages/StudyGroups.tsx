@@ -147,12 +147,20 @@ export default function StudyGroups() {
       setUpcomingSessions(sessions);
 
       // Only load public groups when a course is selected
+      // Narrowed the type so it only passes Group[] - Rise
       if (courseId) {
         const pub = await fetchPublicGroups(courseId);
-        setPublicGroups(pub);
+
+        if (Array.isArray(pub)) {
+          setPublicGroups(pub);
+        } else {
+          console.error(pub.detail);
+          setPublicGroups([]); // or keep previous
+        }
       } else {
-        setPublicGroups([]); // or keep previous list, your call
+        setPublicGroups([]);
       }
+
     } catch (err) {
       console.error(err);
       if (err instanceof Error)
@@ -203,7 +211,7 @@ export default function StudyGroups() {
     const firstWeekday = new Date(year, month, 1).getDay(); // 0=Sun
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-    const cells = [];
+    const cells: (Date | null)[] = []; // specified that it stores a date - Rise
     for (let i = 0; i < firstWeekday; i++) {
       cells.push(null);
     }
