@@ -1,5 +1,6 @@
 // Jacob Craig
 
+import type { Key, ReactNode } from "react";
 import type { Course } from "../hooks/useCurrentUser.js";
 import { API_BASE } from "./base.js";
 
@@ -11,7 +12,55 @@ export interface Session { // change types as needed - Rise
 }
 
 export interface Group {
-  
+  group_name: string;
+  group_id: number;
+  role: string;
+  members: any;
+  max_members: any;
+  last_session: any;
+}
+
+export interface ChatGroup {
+  name: string;
+  id: number;
+
+}
+
+export interface ScheduleGroup{
+  name: ReactNode;
+  id: number;
+
+}
+
+export interface ManageGroup {
+  name: ReactNode;
+  role: any;
+  id: number;
+
+}
+
+export interface Member {
+  joined_at: any;
+  role: ReactNode;
+  user_name: string;
+  user_id: Key | null | undefined;
+
+}
+
+export interface StudyRequest {
+  request_date: any;
+  full_name: string;
+  user_id: number;
+}
+
+export interface Date {
+  today: string;
+}
+
+export interface Invite {
+  expires_at: ReactNode;
+  invite_code: ReactNode;
+
 }
 
 // small helper to standardize fetch + error handling
@@ -47,12 +96,13 @@ export async function fetchPublicGroups(courseId: never, limit = 20) {
   return apiFetch(`/groups/public?${params.toString()}`);
 }
 
-export async function fetchMyGroups(userId: any) {
+export async function fetchMyGroups(userId: number): Promise<Group[]> { // Had to promise that it returns a group to fix the error, but I'm unsure if it actually does. - Rise
   const params = new URLSearchParams({
     user_id: String(userId),
   });
 
-  return apiFetch(`/groups/mine?${params.toString()}`);
+  const res = await apiFetch(`/groups/mine?${params.toString()}`);
+  return res as Group[];
 }
 
 export async function createGroup(payload: { group_name: string; max_members: number; course_id: number; is_private: boolean; creator_user_id: any; }) {
@@ -86,14 +136,15 @@ export async function createSession(groupId: any, payload: { session_date: strin
   });
 }
 
-export async function fetchUpcomingSessions(userId: any, limit = 50) {
+export async function fetchUpcomingSessions(userId: number): Promise<Session[]> { // Had to promise that it returns sessions to fix the error, but I'm unsure if it actually does. - Rise
   const params = new URLSearchParams({
     user_id: String(userId),
-    limit: String(limit),
   });
 
-  return apiFetch(`/groups/sessions/upcoming?${params.toString()}`);
+  const res = await apiFetch(`/sessions/upcoming?${params.toString()}`);
+  return res as Session[];
 }
+
 
 // GET /groups/:id/requests?owner_id=...
 // returns: [{ user_id, full_name, request_date }, ...]

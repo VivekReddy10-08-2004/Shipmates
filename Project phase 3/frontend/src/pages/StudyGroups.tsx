@@ -18,28 +18,34 @@ import {
   searchCourses,
   type Session,
   type Group,
+  type ManageGroup,
+  type ScheduleGroup,
+  type StudyRequest,
+  type Member,
+  type Invite,
+  type ChatGroup,
 } from "../api/studygroups.js";
 
 import ChatPage from "./ChatPage.js";
 import CheckJoinIcon from "../assets/CheckJoin.png";
 import { API_BASE } from "../api/base.js";
-import { type User } from "../hooks/useCurrentUser.js";
+import { type Course, type User } from "../hooks/useCurrentUser.js";
 
 export default function StudyGroups() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
 
   // chat state 
-  const [chatGroup, setChatGroup] = useState(null);
+  const [chatGroup, setChatGroup] = useState<ChatGroup | null>(null);
 
   // filters / data 
   const [courseId, setCourseId] = useState(null);
-  const [publicGroups, setPublicGroups] = useState([]);
+  const [publicGroups, setPublicGroups] = useState<Group[]>([]);
   const [myGroups, setMyGroups] = useState<Group[]>([]);
   const [upcomingSessions, setUpcomingSessions] = useState<Session[]>([]);
 
   const [courseQuery, setCourseQuery] = useState("");
-  const [courseSuggestions, setCourseSuggestions] = useState([]);
+  const [courseSuggestions, setCourseSuggestions] = useState<Course[]>([]);
   const [courseSearchLoading, setCourseSearchLoading] = useState(false);
 
   const [loading, setLoading] = useState(false);
@@ -51,7 +57,7 @@ export default function StudyGroups() {
   const [newIsPrivate, setNewIsPrivate] = useState(false);
 
   // schedule session 
-  const [scheduleGroup, setScheduleGroup] = useState(null); // { id, name } or null
+  const [scheduleGroup, setScheduleGroup] = useState<ScheduleGroup | null>(null); // { id, name } or null
   const [sessionDate, setSessionDate] = useState("");
   const [sessionStart, setSessionStart] = useState("");
   const [sessionEnd, setSessionEnd] = useState("");
@@ -65,17 +71,17 @@ export default function StudyGroups() {
     const today = new Date();
     return new Date(today.getFullYear(), today.getMonth(), 1);
   });
-  const [selectedCalendarDate, setSelectedCalendarDate] = useState(null);
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null);
 
   // manage members 
-  const [manageGroup, setManageGroup] = useState(null); // { id, name, role } or null
+  const [manageGroup, setManageGroup] = useState<ManageGroup | null>(null); // { id, name, role } or null
   const [showManageModal, setShowManageModal] = useState(false);
   const [manageTab, setManageTab] = useState("requests"); // "requests" | "members"
-  const [manageRequests, setManageRequests] = useState([]);
-  const [manageMembers, setManageMembers] = useState([]);
+  const [manageRequests, setManageRequests] = useState<StudyRequest[]>([]);
+  const [manageMembers, setManageMembers] = useState<Member[]>([]);
   const [manageLoading, setManageLoading] = useState(false);
   const [manageError, setManageError] = useState("");
-  const [inviteCodeInfo, setInviteCodeInfo] = useState(null);
+  const [inviteCodeInfo, setInviteCodeInfo] = useState<Invite | null>(null);
   const [inviteCodeLoading, setInviteCodeLoading] = useState(false);
   const [inviteCodeError, setInviteCodeError] = useState("");
 
@@ -137,7 +143,7 @@ export default function StudyGroups() {
         fetchMyGroups(userId),
         fetchUpcomingSessions(userId),
       ]);
-      setMyGroups(mine); // I'm assuming "mine" is an array of groups - Rise
+      setMyGroups(mine); // I'm assuming "mine" is an array of groups
       setUpcomingSessions(sessions);
 
       // Only load public groups when a course is selected
@@ -612,7 +618,8 @@ export default function StudyGroups() {
       await loadData();
     } catch (err) {
       console.error(err);
-      showToastMessage(err.message || "Failed to join with code", "error");
+      if (err instanceof Error)
+        showToastMessage(err.message || "Failed to join with code", "error");
     } finally {
       setInviteJoinLoading(false);
     }
