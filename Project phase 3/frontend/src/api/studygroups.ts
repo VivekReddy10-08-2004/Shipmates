@@ -72,15 +72,21 @@ async function apiFetch(path: string, options = {}) {
     ...options,
   });
 
-  let data: { detail?: string } = {};
+
+  let data: {
+    status: string;
+    message: string;
+    detail?: string;
+  } | undefined;
+
   try {
     data = await res.json();
   } catch {
-    data = {};
+    data = undefined; // had to change it so the data could be possibly undefined, since it was complaining that there were missing properties - Rise
   }
 
   if (!res.ok) {
-    const msg = data.detail || "Request failed";
+    const msg = data?.detail || "Request failed";
     throw new Error(msg);
   }
 
@@ -102,7 +108,7 @@ export async function fetchMyGroups(userId: number): Promise<Group[]> { // Had t
   });
 
   const res = await apiFetch(`/groups/mine?${params.toString()}`);
-  return res as Group[];
+  return res as unknown as Group[];
 }
 
 export async function createGroup(payload: { group_name: string; max_members: number; course_id: number; is_private: boolean; creator_user_id: any; }) {
@@ -136,13 +142,13 @@ export async function createSession(groupId: any, payload: { session_date: strin
   });
 }
 
-export async function fetchUpcomingSessions(userId: number): Promise<Session[]> { // Had to promise that it returns sessions to fix the error, but I'm unsure if it actually does. - Rise
+export async function fetchUpcomingSessions(userId: number | null, p0?: number): Promise<Session[]> { // Had to promise that it returns sessions to fix the error, but I'm unsure if it actually does. - Rise
   const params = new URLSearchParams({
     user_id: String(userId),
   });
 
   const res = await apiFetch(`/sessions/upcoming?${params.toString()}`);
-  return res as Session[];
+  return res as unknown as Session[];
 }
 
 
@@ -203,11 +209,26 @@ export async function kickMember(groupId: any, userId: any, ownerId: any) {
   return res.json();
 }
 
-export async function generateInviteCode(groupId: any, ownerId: any) {
-  return apiFetch(`/groups/${groupId}/invite-code`, {
+// Changed so handleGenerateInviteCode stops complaining that "res"'s type (from ApiFetch detail?: string) couldn't be assigned to 'SetStateAction<Invite | null>'. - Rise
+export async function generateInviteCode(
+  groupId: number,
+  ownerId: number
+): Promise<Invite> {
+  const data = await apiFetch(`/groups/${groupId}/invite-code`, {
     method: "POST",
     body: JSON.stringify({ owner_id: ownerId }),
   });
+
+  // If backend returned an error object like { detail: "..." }
+  if (data && typeof data === "object" && "detail" in data) {
+    throw new Error(
+      typeof data.detail === "string"
+        ? data.detail
+        : "Failed to generate invite code"
+    );
+  }
+
+  return data as unknown as Invite;
 }
 
 export async function joinByInviteCode(inviteCode: string, userId: any) {
@@ -227,5 +248,5 @@ export async function searchCourses(query: any, limit = 8) {
   });
 
   const data = await apiFetch(`/courses/search?${params.toString()}`); // had to change to await instead of return, because it didn't like me trying to apply a string to the type of Course[]- Rise
-  return data as Course[];
+  return data as unknown as Course[];
 }
