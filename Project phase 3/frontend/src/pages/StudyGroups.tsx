@@ -153,7 +153,7 @@ export default function StudyGroups() {
 
         if (Array.isArray(pub)) {
           setPublicGroups(pub);
-        } else {
+        } else if (pub) {
           console.error(pub.detail);
           setPublicGroups([]); // or keep previous
         }
@@ -203,6 +203,12 @@ export default function StudyGroups() {
     return map;
   })();
 
+  interface CalendarCell {
+    day: number;
+    dateStr: string;
+    hasEvents: boolean;
+  } 
+
   // calendar cells for current calendarMonth
   const calendarCells = (() => {
     const year = calendarMonth.getFullYear();
@@ -211,7 +217,7 @@ export default function StudyGroups() {
     const firstWeekday = new Date(year, month, 1).getDay(); // 0=Sun
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-    const cells: (Date | null)[] = []; // specified that it stores a date - Rise
+    const cells: (CalendarCell | null)[] = []; // specified that it stores a date. Also had to replace it with an interface - Rise
     for (let i = 0; i < firstWeekday; i++) {
       cells.push(null);
     }
@@ -246,8 +252,13 @@ export default function StudyGroups() {
 
   const openCalendar = () => {
     if (upcomingSessions.length > 0) {
-      const first = upcomingSessions[0].session_date; // "YYYY-MM-DD"
+      const firstSession = upcomingSessions[0]; // had to store upcommingSessions in a variable first for it to stop complaining that it might be undefined - Rise
+
+      if (!firstSession?.session_date) return;
+
+      const first = firstSession.session_date; // "YYYY-MM-DD"
       const [y, m] = first.split("-").map(Number);
+
       setCalendarMonth(new Date(y, m - 1, 1));
       setSelectedCalendarDate(first);
     } else {
@@ -258,8 +269,10 @@ export default function StudyGroups() {
         String(today.getMonth() + 1).padStart(2, "0") +
         "-" +
         String(today.getDate()).padStart(2, "0");
+
       setSelectedCalendarDate(todayStr);
     }
+
     setShowCalendarModal(true);
   };
 
@@ -283,8 +296,17 @@ export default function StudyGroups() {
 
     try {
       if (tab === "requests" && groupRole === "owner") {
-        const data = await fetchPendingJoinRequests(groupId, userId);
+      const data = await fetchPendingJoinRequests(groupId, userId);
+      // added type guard to stop the program from complaining about data's type not being assignable to the parameter StudyRequest - Rise
+      if (Array.isArray(data)) {
         setManageRequests(data);
+      } else if (data) { // data exists but isnt' an array
+        setManageRequests([]);
+        setManageError(data.detail || "Failed to load requests");
+      } else { // data is undefined
+        setManageRequests([]);
+        setManageError("Failed to load requests");
+      }
       }
 
       if (tab === "members") {
@@ -424,6 +446,11 @@ export default function StudyGroups() {
     setError("");
     try {
       const res = await joinGroup(groupId, userId);
+      
+      if (!res) { // check so it stops complaining that res could be undefined - Rise
+        setError("No response from server");
+        return;
+      }
 
       if (res.status === "joined") {
         await loadData();
@@ -802,7 +829,7 @@ export default function StudyGroups() {
                       <input
                         type="number"
                         value={newMaxMembers}
-                        onChange={(e) => setNewMaxMembers(e.target.value)}
+                        onChange={(e) => setNewMaxMembers(Number(e.target.value))} // converted it to a number before setting the state, since it didn't like the fact that we were trying to assign a string to a number - Rise
                         min={1}
                       />
                     </label>

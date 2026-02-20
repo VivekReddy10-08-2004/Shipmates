@@ -79,14 +79,14 @@ export default function HomePage() {
     async function loadDashboard() {
       try {
         const [myGroups, sessions] = await Promise.all([
-          fetchMyGroups(userId),
+          fetchMyGroups(userId!),
           // limit = 1 so we just pick the next one
           fetchUpcomingSessions(userId, 1),
         ]);
 
         setActiveGroups(Array.isArray(myGroups) ? myGroups.length : 0);
-        const s =
-          Array.isArray(sessions) && sessions.length > 0 ? sessions[0] : null;
+        const s: Session | null =
+          Array.isArray(sessions) && sessions.length > 0 ? sessions[0]! : null;
         setNextSession(s);
       } catch (err) {
         console.error("Failed to load dashboard stats", err);
