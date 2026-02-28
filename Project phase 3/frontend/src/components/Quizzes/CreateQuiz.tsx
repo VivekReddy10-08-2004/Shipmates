@@ -14,6 +14,13 @@ export default function CreateQuiz() {
     }
   };
 
+  const addQuestion = () => {
+    setQuestions([
+      ...questions,
+      { text: "", answers: [{ text: "", is_correct: false }] },
+    ]);
+  };
+
 
   const addAnswer = (qi) => {
     const next = [...questions];
@@ -67,6 +74,7 @@ export default function CreateQuiz() {
         </div>
       ))}
       <div style={{ marginTop: 8 }}>
+        <button onClick={addQuestion} style={{ marginRight: 8 }}>Add Question</button>
         <button onClick={submit}>Save Quiz</button>
       </div>
       {status && <div style={{ marginTop: 8 }}>{status}</div>}
