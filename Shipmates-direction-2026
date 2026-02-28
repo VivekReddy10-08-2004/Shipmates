@@ -1,0 +1,42 @@
+Shipmates is evolving into an AI‑powered, course‑centric study app that turns students’ notes into shared quizzes and flashcards they can use with their classmates.
+
+Shipmates direction (high‑level)
+Shipmates helps college students learn faster by:
+
+Letting them upload or paste class notes for each course.
+
+Using generative AI to automatically create high‑quality flashcards and quiz questions from those notes.
+
+Letting course‑mates share, edit, and study from these decks together inside small groups, with light social features (chat, sessions, basic stats).
+
+In one line:
+
+Shipmates is an AI‑powered study platform that converts your course notes into collaborative flashcards and quizzes you can study with your classmates.
+
+Key user flows in this direction
+Students join or create course spaces and small study groups.
+
+For a given course, a student can paste notes or upload text/PDF excerpts.
+
+Shipmates’ AI engine generates:
+
+Flashcards (question/answer style, definitions, concepts).
+
+Quiz questions (multiple choice/short answer) aligned to that course.
+
+Students can review, edit, and approve AI‑generated cards, then:
+
+Add them to shared course decks.
+
+Use built‑in quiz/flashcard modes to study.
+
+See which decks their friends or group are using.
+
+Social stays focused and light: group chats, sharing decks into groups, and maybe simple progress indicators (e.g., “You and 3 friends studied this deck this week”).
+
+How this ties to your requirements
+Generative AI is core, not a side feature: it’s what creates the study material from notes.
+
+You still demonstrate full software engineering: requirements, system design (frontend, backend, DB, AI service), implementation, testing, and evaluation of AI output quality.
+
+On a resume, you can frame it as building an end‑to‑end AI study companion around real college courses and collaboration.

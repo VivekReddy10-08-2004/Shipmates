@@ -191,71 +191,41 @@ def delete_resource(resource_id: int, uploader_id: int = Query(...)):
         cur.close()
         conn.close()
 
-                   title,
-                   description,
-                   filetype,
-                   source,
-                   upload_date
-            FROM Resource
-            WHERE resource_id = %s
-            """,
-            (resource_id,),
+
+@router.post("/upload-file", status_code=status.HTTP_201_CREATED, response_model=dict)
+async def upload_resource_file(
+    uploader_id: int = Query(...),
+    title: str = Query(...),
+    description: str = Query(None),
+    filetype: str = Query(...),
+    file: UploadFile = File(...),
+):
+    """Upload a file and create a resource record pointing to it."""
+    if not file.filename:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Empty filename",
         )
-        row = cur.fetchone()
-
-        conn.commit()
-        return jsonify(row), 201
-
-    except Exception as e:
-        print("Error in /resources POST:", e)
-        conn.rollback()
-        return jsonify({"error": "Failed to create resource"}), 500
-    finally:
-        cur.close()
-        conn.close()
-
-
-@bp.route("/resources/upload-file", methods=["POST"])
-def upload_resource_file():
-    """
-    upload a file (pdf / video / other) and create a Resource row that points
-    at /uploads/resources/<file>
-    """
-    user = session.get("user")
-    if not user:
-        return jsonify({"error": "Not logged in"}), 401
-
-    user_id = user["user_id"]
-
-    title = (request.form.get("title") or "").strip()
-    description = (request.form.get("description") or "").strip()
-    filetype = (request.form.get("filetype") or "").strip().upper()  # PDF / VIDEO / OTHER
-
-    if not title or not filetype:
-        return jsonify({"error": "title and filetype are required"}), 400
-
-    if "file" not in request.files:
-        return jsonify({"error": "No file uploaded"}), 400
-
-    file = request.files["file"]
-    if file.filename == "":
-        return jsonify({"error": "Empty filename"}), 400
 
     if not _allowed_resource_file(file.filename):
-        return jsonify({"error": "Unsupported file type"}), 400
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported file type",
+        )
 
-    filename = secure_filename(file.filename)
+    _, ext = os.path.splitext(file.filename)
+    new_name = f"{os.urandom(12).hex()}{ext.lower()}"
 
-    # uploads/resources/<filename>
-    base_upload = current_app.config["UPLOAD_FOLDER"]
-    resources_dir = os.path.join(base_upload, "resources")
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    resources_dir = os.path.join(base_dir, "uploads", "resources")
     os.makedirs(resources_dir, exist_ok=True)
 
-    full_path = os.path.join(resources_dir, filename)
-    file.save(full_path)
+    full_path = os.path.join(resources_dir, new_name)
+    contents = await file.read()
+    with open(full_path, "wb") as out:
+        out.write(contents)
 
-    relative_path = f"resources/{filename}"
-    url = f"/uploads/{relative_path}"
+    url = f"/uploads/resources/{new_name}"
 
     conn = get_db_connection()
     cur = conn.cursor(dictionary=True)
@@ -266,18 +236,13 @@ def upload_resource_file():
             INSERT INTO Resource (uploader_id, title, description, filetype, source, upload_date)
             VALUES (%s, %s, %s, %s, %s, NOW())
             """,
-            (user_id, title, description, filetype, url),
+            (uploader_id, title.strip(), description, filetype.upper(), url),
         )
         resource_id = cur.lastrowid
 
         cur.execute(
             """
-            SELECT resource_id,
-                   title,
-                   description,
-                   filetype,
-                   source,
-                   upload_date
+            SELECT resource_id, title, description, filetype, source, upload_date
             FROM Resource
             WHERE resource_id = %s
             """,
@@ -286,12 +251,14 @@ def upload_resource_file():
         row = cur.fetchone()
 
         conn.commit()
-        return jsonify(row), 201
+        return row
 
     except Exception as e:
-        print("Error in /resources/upload-file POST:", e)
         conn.rollback()
-        return jsonify({"error": "Failed to upload resource"}), 500
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
     finally:
         cur.close()
         conn.close()
