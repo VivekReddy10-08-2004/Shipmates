@@ -1,6 +1,6 @@
 # Jacob Craig
 
-from fastapi import APIRouter, HTTPException, status, Query
+from fastapi import APIRouter, HTTPException, status, Query, Body
 from mysql.connector import Error as MySQLError
 import secrets
 from datetime import datetime, date, timedelta
@@ -270,8 +270,8 @@ def get_my_groups(user_id: int = Query(...)):
             conn.close()
 
 
-@bp.route("/<int:group_id>/sessions", methods=["POST"])
-def create_session(group_id):
+@router.post("/{group_id}/sessions", status_code=status.HTTP_201_CREATED, response_model=dict)
+def create_session(group_id: int, payload: dict = Body(...)):
     """
     Schedule a new study session for a specific group, via CreateStudySession.
 
@@ -284,24 +284,36 @@ def create_session(group_id):
       "notes": "Midterm review"
     }
     """
-    data = request.get_json(silent=True) or {}
+    data = payload or {}
 
     required = ["session_date", "start_time", "end_time", "location"]
     missing = [k for k in required if not data.get(k)]
     if missing:
-        return jsonify({"detail": f"Missing required fields: {', '.join(missing)}"}), 400
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Missing required fields: {', '.join(missing)}",
+        )
 
     try:
         session_date = datetime.strptime(data["session_date"], "%Y-%m-%d").date()
         start_time = datetime.strptime(data["start_time"], "%H:%M").time()
         end_time = datetime.strptime(data["end_time"], "%H:%M").time()
     except ValueError:
-        return jsonify({"detail": "Invalid date or time format"}), 400
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid date or time format",
+        )
 
     if session_date < date.today():
-        return jsonify({"detail": "Session date cannot be in the past"}), 400
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Session date cannot be in the past",
+        )
     if end_time <= start_time:
-        return jsonify({"detail": "End time must be after start time"}), 400
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="End time must be after start time",
+        )
 
     location = data["location"]
     notes = data.get("notes")
@@ -322,8 +334,14 @@ def create_session(group_id):
             conn.rollback()
             msg = str(e)
             if "GROUP_NOT_FOUND" in msg:
-                return jsonify({"detail": "Group not found"}), 404
-            return jsonify({"detail": msg}), 500
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Group not found",
+                )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=msg,
+            )
 
         session_id = None
         for result in cursor.stored_results():
@@ -334,14 +352,20 @@ def create_session(group_id):
 
         conn.commit()
         if session_id is None:
-            return jsonify({"detail": "Failed to create session"}), 500
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create session",
+            )
 
-        return jsonify({"session_id": session_id}), 201
+        return {"session_id": session_id}
 
     except MySQLError as e:
         if conn is not None:
             conn.rollback()
-        return jsonify({"detail": str(e)}), 500
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
 
     finally:
         if cursor is not None:
@@ -350,8 +374,8 @@ def create_session(group_id):
             conn.close()
 
 
-@bp.route("/<int:group_id>/requests", methods=["GET"])
-def get_group_join_requests(group_id: int):
+@router.get("/{group_id}/requests", response_model=list[dict])
+def get_group_join_requests(group_id: int, owner_id: int = Query(...)):
     """
     List PENDING join requests for a group (owner only).
     Wraps GetGroupJoinRequestsForOwner.
@@ -359,10 +383,6 @@ def get_group_join_requests(group_id: int):
     Query param:
       ?owner_id=1005
     """
-    owner_id = request.args.get("owner_id", type=int)
-    if not owner_id:
-        return jsonify({"detail": "Missing owner_id"}), 400
-
     conn = None
     cursor = None
 
@@ -375,8 +395,14 @@ def get_group_join_requests(group_id: int):
         except MySQLError as e:
             msg = str(e)
             if "NOT_OWNER" in msg:
-                return jsonify({"detail": "Only group owners can view requests."}), 403
-            return jsonify({"detail": msg}), 500
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Only group owners can view requests.",
+                )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=msg,
+            )
 
         results = []
         for result in cursor.stored_results():
@@ -393,10 +419,13 @@ def get_group_join_requests(group_id: int):
                     }
                 )
 
-        return jsonify(results), 200
+        return results
 
     except MySQLError as e:
-        return jsonify({"detail": str(e)}), 500
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
 
     finally:
         if cursor is not None:
@@ -405,20 +434,18 @@ def get_group_join_requests(group_id: int):
             conn.close()
 
 
-@bp.route("/<int:group_id>/requests/<int:target_user_id>/approve", methods=["POST"])
-def approve_join_request(group_id: int, target_user_id: int):
+@router.post("/{group_id}/requests/{target_user_id}/approve", response_model=dict)
+def approve_join_request(
+    group_id: int,
+    target_user_id: int,
+    owner_id: int = Body(..., embed=True),
+):
     """
     Approve a pending join request via ApproveJoinRequest.
 
     Body JSON:
       { "owner_id": 1005 }
     """
-    data = request.get_json(silent=True) or {}
-    owner_id = data.get("owner_id")
-
-    if not owner_id:
-        return jsonify({"detail": "Missing owner_id"}), 400
-
     conn = None
     cursor = None
 
@@ -436,23 +463,44 @@ def approve_join_request(group_id: int, target_user_id: int):
             conn.rollback()
             msg = str(e)
             if "NOT_OWNER" in msg:
-                return jsonify({"detail": "Only group owners can approve requests."}), 403
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Only group owners can approve requests.",
+                )
             if "NO_PENDING_REQUEST" in msg:
-                return jsonify({"detail": "No pending request for this user."}), 404
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="No pending request for this user.",
+                )
             if "GROUP_FULL" in msg:
-                return jsonify({"detail": "Group is full"}), 409
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Group is full",
+                )
             if "ALREADY_MEMBER" in msg:
-                return jsonify({"detail": "User already a member"}), 409
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="User already a member",
+                )
             if "GROUP_NOT_FOUND" in msg:
-                return jsonify({"detail": "Group not found"}), 404
-            return jsonify({"detail": msg}), 500
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Group not found",
+                )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=msg,
+            )
 
-        return jsonify({"status": "approved"}), 200
+        return {"status": "approved"}
 
     except MySQLError as e:
         if conn is not None:
             conn.rollback()
-        return jsonify({"detail": str(e)}), 500
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
 
     finally:
         if cursor is not None:
@@ -461,20 +509,18 @@ def approve_join_request(group_id: int, target_user_id: int):
             conn.close()
 
 
-@bp.route("/<int:group_id>/requests/<int:target_user_id>/reject", methods=["POST"])
-def reject_join_request(group_id: int, target_user_id: int):
+@router.post("/{group_id}/requests/{target_user_id}/reject", response_model=dict)
+def reject_join_request(
+    group_id: int,
+    target_user_id: int,
+    owner_id: int = Body(..., embed=True),
+):
     """
     Reject a pending join request via RejectJoinRequest.
 
     Body JSON:
       { "owner_id": 1005 }
     """
-    data = request.get_json(silent=True) or {}
-    owner_id = data.get("owner_id")
-
-    if not owner_id:
-        return jsonify({"detail": "Missing owner_id"}), 400
-
     conn = None
     cursor = None
 
@@ -492,17 +538,29 @@ def reject_join_request(group_id: int, target_user_id: int):
             conn.rollback()
             msg = str(e)
             if "NOT_OWNER" in msg:
-                return jsonify({"detail": "Only group owners can reject requests."}), 403
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Only group owners can reject requests.",
+                )
             if "NO_PENDING_REQUEST" in msg:
-                return jsonify({"detail": "No pending request to reject."}), 404
-            return jsonify({"detail": msg}), 500
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="No pending request to reject.",
+                )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=msg,
+            )
 
-        return jsonify({"status": "rejected"}), 200
+        return {"status": "rejected"}
 
     except MySQLError as e:
         if conn is not None:
             conn.rollback()
-        return jsonify({"detail": str(e)}), 500
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
 
     finally:
         if cursor is not None:
@@ -511,7 +569,7 @@ def reject_join_request(group_id: int, target_user_id: int):
             conn.close()
 
 
-@bp.route("/<int:group_id>/members", methods=["GET"])
+@router.get("/{group_id}/members", response_model=list[dict])
 def get_group_members(group_id: int):
     """
     Return all members of a group.
@@ -542,10 +600,13 @@ def get_group_members(group_id: int):
                     }
                 )
 
-        return jsonify(members), 200
+        return members
 
     except MySQLError as e:
-        return jsonify({"detail": str(e)}), 500
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
 
     finally:
         if cursor is not None:
@@ -554,19 +615,17 @@ def get_group_members(group_id: int):
             conn.close()
 
 
-@bp.route("/<int:group_id>/members/<int:target_user_id>/kick", methods=["POST"])
-def kick_member(group_id: int, target_user_id: int):
+@router.post("/{group_id}/members/{target_user_id}/kick", response_model=dict)
+def kick_member(
+    group_id: int,
+    target_user_id: int,
+    owner_id: int = Body(..., embed=True),
+):
     """
     Owner-only: remove a member from the group via KickGroupMember.
 
     Body JSON: { "owner_id": 1005 }
     """
-    data = request.get_json(silent=True) or {}
-    owner_id = data.get("owner_id")
-
-    if not owner_id:
-        return jsonify({"detail": "Missing field: owner_id"}), 400
-
     conn = None
     cursor = None
 
@@ -584,19 +643,34 @@ def kick_member(group_id: int, target_user_id: int):
             conn.rollback()
             msg = str(e)
             if "NOT_OWNER" in msg:
-                return jsonify({"detail": "Only owner can remove members"}), 403
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Only owner can remove members",
+                )
             if "OWNER_CANNOT_REMOVE_SELF" in msg:
-                return jsonify({"detail": "Owner cannot remove themselves"}), 400
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Owner cannot remove themselves",
+                )
             if "MEMBER_NOT_FOUND" in msg:
-                return jsonify({"detail": "Member not found in this group"}), 404
-            return jsonify({"detail": msg}), 500
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Member not found in this group",
+                )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=msg,
+            )
 
-        return jsonify({"status": "removed"}), 200
+        return {"status": "removed"}
 
     except MySQLError as e:
         if conn is not None:
             conn.rollback()
-        return jsonify({"detail": str(e)}), 500
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
 
     finally:
         if cursor is not None:
@@ -605,19 +679,13 @@ def kick_member(group_id: int, target_user_id: int):
             conn.close()
 
 
-@bp.route("/<int:group_id>/invite-code", methods=["POST"])
-def generate_invite_code(group_id: int):
+@router.post("/{group_id}/invite-code", response_model=dict)
+def generate_invite_code(group_id: int, owner_id: int = Body(..., embed=True)):
     """
     Owner-only: generate a short-lived invite code for a PRIVATE group.
 
     Body JSON: { "owner_id": 1005 }
     """
-    data = request.get_json(silent=True) or {}
-    owner_id = data.get("owner_id")
-
-    if not owner_id:
-        return jsonify({"detail": "Missing owner_id"}), 400
-
     conn = None
     cursor = None
 
@@ -632,10 +700,16 @@ def generate_invite_code(group_id: int):
         )
         g = cursor.fetchone()
         if not g:
-            return jsonify({"detail": "Group not found"}), 404
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Group not found",
+            )
 
         if not g["is_private"]:
-            return jsonify({"detail": "Invite codes are only for private groups."}), 400
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invite codes are only for private groups.",
+            )
 
         # Verify owner
         cursor.execute(
@@ -648,7 +722,10 @@ def generate_invite_code(group_id: int):
         )
         role_row = cursor.fetchone()
         if not role_row or role_row["role"] != "owner":
-            return jsonify({"detail": "Only group owners can generate invite codes."}), 403
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only group owners can generate invite codes.",
+            )
 
         alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
         invite_code = "".join(secrets.choice(alphabet) for _ in range(8))
@@ -665,15 +742,18 @@ def generate_invite_code(group_id: int):
         )
 
         conn.commit()
-        return jsonify({
+        return {
             "invite_code": invite_code,
             "expires_at": expires_at.isoformat() + "Z",
-        }), 200
+        }
 
     except MySQLError as e:
         if conn is not None:
             conn.rollback()
-        return jsonify({"detail": str(e)}), 500
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
 
     finally:
         if cursor is not None:
@@ -682,20 +762,23 @@ def generate_invite_code(group_id: int):
             conn.close()
 
 
-@bp.route("/join-with-code", methods=["POST"])
-def join_with_code():
+@router.post("/join-with-code", response_model=dict)
+def join_with_code(payload: dict = Body(...)):
     """
     Join a PRIVATE group using an invite code, via JoinPrivateGroupWithCode.
 
     Body JSON:
       { "user_id": 1006, "invite_code": "AB12CD34" }
     """
-    data = request.get_json(silent=True) or {}
+    data = payload or {}
     user_id = data.get("user_id")
     invite_code = (data.get("invite_code") or "").strip().upper()
 
     if not user_id or not invite_code:
-        return jsonify({"detail": "user_id and invite_code are required"}), 400
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="user_id and invite_code are required",
+        )
 
     conn = None
     cursor = None
@@ -710,18 +793,39 @@ def join_with_code():
             conn.rollback()
             msg = str(e)
             if "INVALID_CODE" in msg:
-                return jsonify({"detail": "Invalid invite code"}), 404
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Invalid invite code",
+                )
             if "NOT_PRIVATE_GROUP" in msg:
-                return jsonify({"detail": "Invite code is not for a private group"}), 400
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invite code is not for a private group",
+                )
             if "CODE_EXPIRED" in msg:
-                return jsonify({"detail": "Invite code has expired"}), 410
+                raise HTTPException(
+                    status_code=status.HTTP_410_GONE,
+                    detail="Invite code has expired",
+                )
             if "ALREADY_MEMBER" in msg:
-                return jsonify({"detail": "User already a member"}), 409
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="User already a member",
+                )
             if "GROUP_NOT_FOUND" in msg:
-                return jsonify({"detail": "Group not found"}), 404
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Group not found",
+                )
             if "GROUP_FULL" in msg:
-                return jsonify({"detail": "Group is full"}), 409
-            return jsonify({"detail": msg}), 500
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Group is full",
+                )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=msg,
+            )
 
         group_id = None
         for result in cursor.stored_results():
@@ -733,17 +837,23 @@ def join_with_code():
         conn.commit()
 
         if group_id is None:
-            return jsonify({"detail": "Failed to join group"}), 500
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to join group",
+            )
 
-        return jsonify({
+        return {
             "status": "joined",
             "group_id": group_id,
-        }), 200
+        }
 
     except MySQLError as e:
         if conn is not None:
             conn.rollback()
-        return jsonify({"detail": str(e)}), 500
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
 
     finally:
         if cursor is not None:

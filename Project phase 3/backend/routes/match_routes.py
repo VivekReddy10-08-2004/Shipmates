@@ -1,6 +1,6 @@
 # Jacob Craig
 
-from fastapi import APIRouter, HTTPException, status, Query, UploadFile, File
+from fastapi import APIRouter, HTTPException, status, Query, UploadFile, File, Request
 from mysql.connector import Error as MySQLError
 from db import get_db_connection
 import uuid
@@ -158,156 +158,32 @@ def get_study_buddy_matches(user_id: int = Query(...), limit: int = Query(20, ge
             cur.close()
         if conn is not None:
             conn.close()
-
-    study_style = data.get("study_style")
-    meeting_pref = data.get("meeting_pref")
-    bio = data.get("bio")
-    profile_image_url = data.get("profile_image_url")
-    study_goal = data.get("study_goal")
-    focus_time_pref = data.get("focus_time_pref")
-    noise_pref = data.get("noise_pref")
-    age = data.get("age")
-    preferred_min_age = data.get("preferred_min_age")
-    preferred_max_age = data.get("preferred_max_age")
-    course_ids = data.get("course_ids") or []
-
-    if not user_id:
-        return jsonify({"detail": "user_id is required"}), 400
-
-    conn = None
-    cur = None
-
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor(dictionary=True)
-
-        cur.execute(
-            "CALL UpsertMatchProfile(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-            (
-                user_id,
-                study_style,
-                meeting_pref,
-                bio,
-                profile_image_url,
-                study_goal,
-                focus_time_pref,
-                noise_pref,
-                age,
-                preferred_min_age,
-                preferred_max_age,
-            ),
+@router.post("/profile/image", status_code=status.HTTP_201_CREATED, response_model=dict)
+async def upload_profile_image(request: Request, file: UploadFile = File(...)):
+    """Upload a profile image and return a served URL."""
+    if not file.filename:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Empty filename",
         )
 
-        while cur.nextset():
-            pass
-
-        # reset course list
-        cur.execute(
-            "DELETE FROM Match_Profile_Course WHERE user_id = %s", (user_id,)
-        )
-
-        # max 5 courses
-        course_ids = list(dict.fromkeys(course_ids))[:5]
-
-        if course_ids:
-            values = [(user_id, cid) for cid in course_ids]
-            cur.executemany(
-                "INSERT INTO Match_Profile_Course (user_id, course_id) VALUES (%s, %s)",
-                values,
-            )
-
-        conn.commit()
-
-        return jsonify({"status": "ok"}), 200
-
-    except MySQLError as e:
-        if conn:
-            conn.rollback()
-        return jsonify({"detail": str(e)}), 500
-
-    finally:
-        try:
-            if cur is not None:
-                cur.close()
-            if conn is not None:
-                conn.close()
-        except Exception:
-            pass
-
-
-@bp.route("/match/suggestions", methods=["GET"])
-def get_study_buddy_matches():
-    """
-    Get match suggestions for a user on StudyBuddy Match
-    """
-    user_id = request.args.get("user_id", type=int)
-    limit = request.args.get("limit", default=20, type=int)
-
-    if not user_id:
-        return jsonify({"detail": "user_id is required"}), 400
-
-    conn = None
-    cur = None
-
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor(dictionary=True)
-
-        cur.execute("CALL GetStudyBuddyMatches(%s, %s)", (user_id, limit))
-
-        rows = cur.fetchall() or []
-
-        while cur.nextset():
-            pass
-
-        formatted = []
-        for r in rows:
-            r["shared_courses"] = int(r.get("shared_courses", 0) or 0)
-            r["match_score"] = int(r.get("match_score", 0) or 0)
-            formatted.append(r)
-
-        return jsonify(formatted), 200
-
-    except MySQLError as e:
-        return jsonify({"detail": str(e)}), 500
-
-    finally:
-        try:
-            if cur is not None:
-                cur.close()
-            if conn is not None:
-                conn.close()
-        except Exception:
-            pass
-
-
-@bp.route("/match/profile/image", methods=["POST"])
-def upload_profile_image():
-    """
-    Upload a profile image and return a URL that can be stored in Match_Profile.
-    """
-    if "file" not in request.files:
-        return jsonify({"detail": "No file uploaded"}), 400
-
-    file = request.files["file"]
-    if not file or file.filename == "":
-        return jsonify({"detail": "Empty filename"}), 400
-
-    filename = secure_filename(file.filename)
-    _, ext = os.path.splitext(filename)
+    _, ext = os.path.splitext(file.filename)
     if ext.lower() not in [".png", ".jpg", ".jpeg", ".gif", ".webp"]:
-        return jsonify({"detail": "Unsupported file type"}), 400
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported file type",
+        )
 
-    upload_folder = current_app.config.get("UPLOAD_FOLDER")
-    if not upload_folder:
-        return jsonify({"detail": "Upload folder not configured"}), 500
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    upload_folder = os.path.join(base_dir, "uploads")
+    os.makedirs(upload_folder, exist_ok=True)
 
     new_name = f"{uuid.uuid4().hex}{ext.lower()}"
     save_path = os.path.join(upload_folder, new_name)
-    file.save(save_path)
 
-    # absolute URL back to frontend
-    base = request.url_root.rstrip("/")
-    file_url = f"{base}/uploads/{new_name}"
+    contents = await file.read()
+    with open(save_path, "wb") as out:
+        out.write(contents)
 
-    return jsonify({"url": file_url}), 201
+    file_url = str(request.base_url).rstrip("/") + f"/uploads/{new_name}"
+    return {"url": file_url}
