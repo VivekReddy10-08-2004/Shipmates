@@ -94,7 +94,12 @@ export function RegisterPage() {
             style={styles.input}
           />
 
-          <button type="submit" disabled={loading} style={styles.button}>
+          <button type="submit" disabled={loading}             
+          style={{
+              ...styles.button, 
+              backgroundColor: "rgb(73, 65, 126)",
+              marginTop: 10}}
+          >
             {loading ? "Registering..." : "Register"}
           </button>
         </form>
@@ -182,7 +187,7 @@ export function LoginPage() {
             onClick={() => (window.location.href = "/register")}
             style={{
               ...styles.button, 
-              backgroundColor: "#120a52ff",
+              backgroundColor: "rgb(73, 65, 126)",
               marginTop: 10}}
           >
             Register
@@ -208,7 +213,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     padding: "20px",
   },
   card: {
-    background: "rgba(0,0,0,0.25)",
+    background: "#242452",
     backdropFilter: "blur(10px)",
     padding: "30px",
     width: "100%",

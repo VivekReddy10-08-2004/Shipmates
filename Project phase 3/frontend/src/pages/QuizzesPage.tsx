@@ -7,7 +7,7 @@ export default function QuizzesPage() {
 
   return (
     <div style={{ padding: 20 }}>
-      <h1>Quizzes</h1>
+      <h1 style={styles.title}>Quizzes</h1>
 
       {/* Tabs */}
       <div style={{ display: "flex", gap: "1rem", marginBottom: "2rem", borderBottom: "1px solid rgba(148,163,184,0.3)" }}>
@@ -50,3 +50,10 @@ export default function QuizzesPage() {
     </div>
   );
 }
+
+const styles: { [key: string]: React.CSSProperties } = {
+  title: {
+    color: "#242452",
+    marginBottom: "20px",
+  },
+};

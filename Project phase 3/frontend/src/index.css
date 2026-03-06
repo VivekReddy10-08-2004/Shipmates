@@ -48,6 +48,20 @@ body {
   color: var(--text-title);
 }
 
+/* Input Boxes - Rise */
+.input {
+  padding: 12px 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.1);
+  font-size: 16px;
+  background-color: rgba(10, 15, 26, 0.8);
+  color: white;
+  outline: none;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
 /* Cards / sections */
 
 .section {
@@ -191,10 +205,20 @@ input[type="checkbox"] {
   background: var(--card-soft);
 }
 
+.btn-alt-dark {
+  color: var(--text-main);
+}
+
 /* smaller button variant for headers */
 .btn-sm {
   padding: 0.3rem 0.9rem;
   font-size: 0.82rem;
+}
+
+.btn-sm-2 {
+  padding: 0.3rem 0.9rem;
+  font-size: 0.82rem;
+  color: var(--text-main);
 }
 
 .icon-btn {
@@ -691,6 +715,13 @@ ul.clean-list {
   max-width: 520px;
   font-size: 0.96rem;
   color: var(--text-muted);
+  margin-bottom: 1.2rem;
+}
+
+.hero-standard {
+  max-width: 520px;
+  font-size: 0.96rem;
+  color: var(--text-main);
   margin-bottom: 1.2rem;
 }
 
@@ -1201,7 +1232,7 @@ ul.clean-list {
   border-radius: 999px;
   border: 1px solid var(--border);
   background: #ffffff;
-  color: var(--text-main);
+  color: var(--text-main-dark);
   padding: 0.5rem 0.9rem;
   font-size: 0.95rem;
   outline: none;
