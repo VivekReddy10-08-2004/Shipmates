@@ -66,7 +66,7 @@ export function AccountPage() {
         <button
           style={{
             ...styles.button, 
-            backgroundColor: "#252140ff", 
+            backgroundColor: "#65687cff", 
             marginLeft: 25
           }}
           onClick={(logoutUser)} 
@@ -288,7 +288,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     marginTop: "10px"
   },
   card: {
-    background: "rgba(0,0,0,0.25)",
+    background: "#242452",
     backdropFilter: "blur(10px)",
     padding: "30px",
     width: "100%",
