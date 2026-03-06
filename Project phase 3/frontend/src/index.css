@@ -1,8 +1,8 @@
 :root {
-  --bg: #134577;
-  --bg-soft: #eff4f8;
-  --card: #ed9913;
-  --card-soft: #f7fafd;
+  --bg: #eaeaea;
+  --bg-soft: #f8fcff;
+  --card: #242452;
+  --card-soft: #ffd15e;
   --accent: #0b3a63;
   --accent-dark: #082b49;
   --accent-soft: #e8f0f8;
@@ -10,9 +10,11 @@
   --highlight-soft: #f3e9d6;
   --danger: #8a3a3a;
   --success: #2f5f82;
-  --border: #d4dee8;
-  --text-main: #1f3144;
+  --border: #ffb348;
+  --text-main: #ffffff;
+  --text-main-dark: #102c45;
   --text-muted: #5d7187;
+  --text-title: #242452;
 }
 
 *,
@@ -43,6 +45,7 @@ body {
   font-weight: 800;
   letter-spacing: 0.02em;
   margin: 0 0 1.75rem;
+  color: var(--text-title);
 }
 
 /* Cards / sections */
@@ -180,7 +183,7 @@ input[type="checkbox"] {
 
 .btn-ghost {
   background: transparent;
-  color: var(--text-main);
+  color: var(--text-main-dark);
   border: 1px solid var(--border);
 }
 
@@ -858,6 +861,7 @@ ul.clean-list {
 .feature-grid-title {
   font-size: 1.1rem;
   margin: 0;
+  color: var(--text-title);
 }
 
 .feature-grid-subtitle {
