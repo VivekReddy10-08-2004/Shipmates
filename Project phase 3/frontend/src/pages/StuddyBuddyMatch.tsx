@@ -644,7 +644,7 @@ export default function StudyBuddyMatch() {
                     name="study_style"
                     value={profile.study_style}
                     onChange={handleChange}
-                    className="input"
+                    className="auth-input"
                   >
                     <option value="solo">Solo</option>
                     <option value="pair">Pair</option>
@@ -658,7 +658,7 @@ export default function StudyBuddyMatch() {
                     name="meeting_pref"
                     value={profile.meeting_pref}
                     onChange={handleChange}
-                    className="input"
+                    className="auth-input"
                   >
                     <option value="online">Online</option>
                     <option value="in_person">In-person</option>
@@ -672,7 +672,7 @@ export default function StudyBuddyMatch() {
                     name="study_goal"
                     value={profile.study_goal}
                     onChange={handleChange}
-                    className="input"
+                    className="auth-input"
                   >
                     <option value="make friends">Make friends</option>
                     <option value="ace tests">Ace tests</option>
@@ -695,7 +695,7 @@ export default function StudyBuddyMatch() {
                       name="focus_time_pref"
                       value={profile.focus_time_pref}
                       onChange={handleChange}
-                      className="input"
+                      className="auth-input"
                     >
                       <option value="morning">Morning</option>
                       <option value="afternoon">Afternoon</option>
@@ -711,7 +711,7 @@ export default function StudyBuddyMatch() {
                       name="noise_pref"
                       value={profile.noise_pref}
                       onChange={handleChange}
-                      className="input"
+                      className="auth-input"
                     >
                       <option value="silent">Silent</option>
                       <option value="some noise">Some chatter</option>

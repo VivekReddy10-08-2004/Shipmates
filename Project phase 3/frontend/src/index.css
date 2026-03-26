@@ -1,7 +1,7 @@
 :root {
   --bg: #eaeaea;
-  --bg-soft: #f8fcff;
-  --card: #242452;
+  --bg-soft: #242452;
+  --card: #f8fcff;
   --card-soft: #ffd15e;
   --accent: #0b3a63;
   --accent-dark: #082b49;
@@ -11,10 +11,10 @@
   --danger: #8a3a3a;
   --success: #2f5f82;
   --border: #ffb348;
-  --text-main: #ffffff;
-  --text-main-dark: #102c45;
-  --text-muted: #5d7187;
-  --text-title: #242452;
+  --text-main: #242452;
+  --text-main-alt: #f8fcff;
+  --text-muted: #92adca;
+  --text-title: #f8fcff;
 }
 
 *,
@@ -27,7 +27,7 @@ body {
   margin: 0;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
-  background: var(--bg);
+  background: var(--bg-soft);
   color: var(--text-main);
 }
 
@@ -48,6 +48,64 @@ body {
   color: var(--text-title);
 }
 
+/* Auth Pages - Rise */
+.auth-page {
+  background-color: var(--bg-soft);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.auth-card {
+  background: var(--card);
+  padding: 50px;
+  width: 100%;
+  max-width: 420px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.auth-title {
+  text-align: center;
+  color: var(--bg-soft);
+  margin-bottom: 20px;
+}
+
+.auth-form {
+  background: var(--card);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.auth-input {
+  padding: 12px 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 16px;
+  background-color: color(white);
+  outline: none;
+  border: 1px solid var(--border);
+  width: 100%;
+  filter: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.auth-button {
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: #0ea5e9;
+  color: white;
+  font-size: 16px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
 /* Input Boxes - Rise */
 .input {
   padding: 12px 14px;
@@ -62,6 +120,13 @@ body {
   box-sizing: border-box;
 }
 
+.form-field {
+  width: 100%;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
 /* Cards / sections */
 
 .section {
@@ -74,6 +139,15 @@ body {
   padding: 1.25rem 1.5rem;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
   border: 1px solid var(--border);
+}
+
+.card-big {
+  background: var(--card);
+  padding: 50px;
+  width: 100%;
+  max-width: 600px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
 }
 
 .card-header {
@@ -197,7 +271,7 @@ input[type="checkbox"] {
 
 .btn-ghost {
   background: transparent;
-  color: var(--text-main-dark);
+  color: var(--text-main-alt);
   border: 1px solid var(--border);
 }
 
@@ -1232,7 +1306,7 @@ ul.clean-list {
   border-radius: 999px;
   border: 1px solid var(--border);
   background: #ffffff;
-  color: var(--text-main-dark);
+  color: var(--text-main-alt);
   padding: 0.5rem 0.9rem;
   font-size: 0.95rem;
   outline: none;
