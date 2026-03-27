@@ -58,20 +58,39 @@ export default function CreateFlashcardSet({ onSetCreated }) {
     <div className="card" style={{ maxWidth: 700 }}>
       <h3>Create Flashcard Set</h3>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <input style={{ flex: 1 }} placeholder="Set title" value={title} onChange={(e) => setTitle(e.target.value)} />
+        <input style={{ flex: 1 }} 
+          placeholder="Set title" 
+          value={title} 
+          onChange={(e) => setTitle(e.target.value)} 
+          className="auth-input"/>
         <input style={{ width: 110 }} type="number" value={creatorId} onChange={(e) => setCreatorId(parseInt(e.target.value || '0'))} />
       </div>
 
       {cards.map((c, i) => (
         <div key={i} style={{ marginTop: 8, display: 'flex', gap: 8 }}>
-          <input placeholder="Front" value={c.front} onChange={(e) => updateCard(i, "front", e.target.value)} style={{ flex: 1 }} />
-          <input placeholder="Back" value={c.back} onChange={(e) => updateCard(i, "back", e.target.value)} style={{ flex: 1 }} />
+          <input placeholder="Front" 
+            value={c.front} 
+            onChange={(e) => updateCard(i, "front", e.target.value)} 
+            className="auth-input"
+            style={{ flex: 1 }} />
+          <input placeholder="Back" 
+            value={c.back} 
+            onChange={(e) => updateCard(i, "back", e.target.value)} 
+            className="auth-input"
+            style={{ flex: 1 }} />
         </div>
       ))}
 
       <div style={{ marginTop: 12 }}>
-        <button onClick={addCard}>Add Card</button>
-        <button onClick={submit} style={{ marginLeft: 8 }}>Save Set</button>
+        <button onClick={addCard} 
+          className="small-alt-button">
+            Add Card
+        </button>
+        <button onClick={submit} 
+          style={{ marginLeft: 8 }} 
+          className="small-alt-button">
+            Save Set
+        </button>
       </div>
 
       {status && (
