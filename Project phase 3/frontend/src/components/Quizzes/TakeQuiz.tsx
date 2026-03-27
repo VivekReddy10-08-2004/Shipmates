@@ -62,51 +62,53 @@ export default function TakeQuiz() {
 
   if (!selectedQuiz) {
     return (
-      <div className="card" style={{ marginTop: "2rem" }}>
-        <h3>Take a Quiz</h3>
-        {loading && <div style={{ color: "#9ca3af" }}>Loading quizzes...</div>}
-        {error && <div style={{ color: "#f97373", marginBottom: "1rem" }}>{error}</div>}
-        {!loading && quizzes.length === 0 && (
-          <div style={{ color: "#9ca3af" }}>No quizzes available</div>
-        )}
+      <div>
+        <h1 className="page-subtitle">Take a Quiz</h1>
+        <div className="card" style={{ marginTop: "2rem" }}>
+          {loading && <div style={{ color: "#9ca3af" }}>Loading quizzes...</div>}
+          {error && <div style={{ color: "#f97373", marginBottom: "1rem" }}>{error}</div>}
+          {!loading && quizzes.length === 0 && (
+            <div style={{ color: "#9ca3af" }}>No quizzes available</div>
+          )}
 
-        <div style={{ marginTop: "1rem" }}>
-          {quizzes.map((q) => (
-            <button
-              key={q.id}
-              onClick={() => openQuiz(q.id)}
-              style={{
-                display: "block",
-                width: "100%",
-                padding: "0.75rem 1rem",
-                marginBottom: "0.5rem",
-                borderRadius: "0.75rem",
-                border: "1px solid rgba(148,163,184,0.3)",
-                background: "rgba(14,165,233,0.1)",
-                color: "#e5e7eb",
-                cursor: "pointer",
-                textAlign: "left",
-                transition: "all 0.2s ease",
-              }}
-              onMouseEnter={(e) => {
-                const target = e.target as HTMLElement; // needs to be cast as an HTMLElement - Rise
-                target.style.background = "rgba(14,165,233,0.2)";
-                target.style.borderColor = "rgba(14,165,233,0.5)";
-              }}
-              onMouseLeave={(e) => {
-                const target = e.target as HTMLElement;
-                target.style.background = "rgba(14,165,233,0.1)";
-                target.style.borderColor = "rgba(148,163,184,0.3)";
-              }}
-            >
-              <strong>{q.title}</strong>
-              {q.description && (
-                <div style={{ fontSize: "0.8rem", color: "#9ca3af", marginTop: "0.25rem" }}>
-                  {q.description}
-                </div>
-              )}
-            </button>
-          ))}
+          <div style={{ marginTop: "1rem" }}>
+            {quizzes.map((q) => (
+              <button
+                key={q.id}
+                onClick={() => openQuiz(q.id)}
+                style={{
+                  display: "block",
+                  width: "100%",
+                  padding: "0.75rem 1rem",
+                  marginBottom: "0.5rem",
+                  borderRadius: "0.75rem",
+                  border: "1px solid rgba(148,163,184,0.3)",
+                  background: "rgba(14,165,233,0.1)",
+                  color: "#e5e7eb",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  transition: "all 0.2s ease",
+                }}
+                onMouseEnter={(e) => {
+                  const target = e.target as HTMLElement; // needs to be cast as an HTMLElement - Rise
+                  target.style.background = "rgba(14,165,233,0.2)";
+                  target.style.borderColor = "rgba(14,165,233,0.5)";
+                }}
+                onMouseLeave={(e) => {
+                  const target = e.target as HTMLElement;
+                  target.style.background = "rgba(14,165,233,0.1)";
+                  target.style.borderColor = "rgba(148,163,184,0.3)";
+                }}
+              >
+                <strong>{q.title}</strong>
+                {q.description && (
+                  <div style={{ fontSize: "0.8rem", color: "#9ca3af", marginTop: "0.25rem" }}>
+                    {q.description}
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     );
