@@ -57,7 +57,7 @@ export function AccountPage() {
         <p style={styles.text}><strong>Bio:</strong> {user.bio}</p>
 
         <button
-          style={styles.button}
+          className="small-alt-button"
           onClick={() => (window.location.href = "/user/account/edit")} // go to edit account page
         >
           Edit Account
