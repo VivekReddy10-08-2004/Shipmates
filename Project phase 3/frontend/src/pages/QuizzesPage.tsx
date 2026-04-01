@@ -6,8 +6,8 @@ export default function QuizzesPage() {
   const [tab, setTab] = useState("take");
 
   return (
-    <div style={{ padding: 20 }}>
-      <h1>Quizzes</h1>
+    <div style={{ padding: 32 }}>
+      <h1 className="page-title">Quizzes</h1>
 
       {/* Tabs */}
       <div style={{ display: "flex", gap: "1rem", marginBottom: "2rem", borderBottom: "1px solid rgba(148,163,184,0.3)" }}>
@@ -43,10 +43,19 @@ export default function QuizzesPage() {
         </button>
       </div>
 
-      <div style={{ maxWidth: 900 }}>
+      <div style={{ 
+        maxWidth: 900
+      }}>
         {tab === "take" && <TakeQuiz />}
         {tab === "create" && <CreateQuiz />}
       </div>
     </div>
   );
 }
+
+const styles: { [key: string]: React.CSSProperties } = {
+  title: {
+    color: "#242452",
+    marginBottom: "20px",
+  },
+};

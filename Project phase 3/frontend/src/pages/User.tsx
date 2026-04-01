@@ -30,9 +30,9 @@ export function AccountPage() {
 
   if (loading) {
     return (
-      <div style={styles.page}>
-        <div style={styles.card}>
-          <h1 style={styles.title}>Loading...</h1>
+      <div className="auth-page">
+        <div className="auth-card">
+          <h1 className="auth-title">Loading...</h1>
         </div>
       </div>
     );
@@ -44,9 +44,9 @@ export function AccountPage() {
   }
 
   return (
-    <div style={styles.page}>
-      <div style={styles.card}>
-        <h1 style={styles.title}>My Account</h1>
+    <div className="auth-page">
+      <div className="card-big">
+        <h1 className = "auth-title">My Account</h1>
 
         <p style={styles.text}><strong>First Name:</strong> {user.first_name}</p>
         <p style={styles.text}><strong>Last Name:</strong> {user.last_name}</p>
@@ -57,7 +57,7 @@ export function AccountPage() {
         <p style={styles.text}><strong>Bio:</strong> {user.bio}</p>
 
         <button
-          style={styles.button}
+          className="small-alt-button"
           onClick={() => (window.location.href = "/user/account/edit")} // go to edit account page
         >
           Edit Account
@@ -66,7 +66,7 @@ export function AccountPage() {
         <button
           style={{
             ...styles.button, 
-            backgroundColor: "#252140ff", 
+            backgroundColor: "#65687cff", 
             marginLeft: 25
           }}
           onClick={(logoutUser)} 
@@ -161,8 +161,8 @@ export function EditAccountPage() {
 
 
   return (
-    <div style={styles.page}>
-      <div style={styles.card}>
+    <div className="auth-page">
+      <div className="card-big">
         <h1>Edit Account Details</h1>
 
         {error && <p style={{ color: "red" }}>{error}</p>}
@@ -174,7 +174,7 @@ export function EditAccountPage() {
             name="first_name"
             value={user.first_name}
             onChange={handleChange}
-            style={styles.input}
+            className="auth-input"
           />
 
           <label>Last Name</label>
@@ -182,7 +182,7 @@ export function EditAccountPage() {
             name="last_name"
             value={user.last_name}
             onChange={handleChange}
-            style={styles.input}
+            className="auth-input"
           />
 
           <label>Email</label>
@@ -190,7 +190,7 @@ export function EditAccountPage() {
             name="email"
             value={user.email}
             onChange={handleChange}
-            style={styles.input}
+            className="auth-input"
           />
 
           <label>College Year</label>
@@ -198,7 +198,7 @@ export function EditAccountPage() {
             name="college_level"
             value={user.college_level}
             onChange={handleChange}
-            style={styles.input}
+            className="auth-input"
           >
             <option value="">Select Year</option>
             <option value="Freshman">Freshman</option>
@@ -208,13 +208,13 @@ export function EditAccountPage() {
             <option value="Graduate">Graduate</option> 
           </select> 
           
-          <div style={styles.formField}>
+          <div className="form-field">
           <label>College</label>
           <select
             name="college_id"
             value={user.college_id}
             onChange={handleChange}
-            style={styles.input}
+            className="auth-input"
           >
             <option value="">Select College</option>
             {colleges.map(c => (
@@ -225,13 +225,13 @@ export function EditAccountPage() {
           </select>
           </div>
           
-          <div style={styles.formField}>
+          <div className="form-field">
           <label>Major</label>
           <select
             name="major_id"
             value={user.major_id}
             onChange={handleChange}
-            style={styles.input}
+            className="auth-input"
           >
             <option value="">Select Major</option>
             {majors.map(m => (
@@ -247,12 +247,12 @@ export function EditAccountPage() {
             name="bio"
             value={user.bio}
             onChange={handleChange}
-            style={styles.input}
+            className="auth-input"
           />
 
           <button 
             type="submit" 
-            style={styles.button} 
+            className="auth-button"
             disabled={saving}>
             {saving ? "Saving..." : "Save Changes"}
           </button>
@@ -288,7 +288,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     marginTop: "10px"
   },
   card: {
-    background: "rgba(0,0,0,0.25)",
+    background: "#242452",
     backdropFilter: "blur(10px)",
     padding: "30px",
     width: "100%",
