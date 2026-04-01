@@ -1,13 +1,17 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
 import os
 from dotenv import load_dotenv
 
 # Import FastAPI routers
 from routes.auth_routes import router as auth_router
 from routes.user_routes import router as user_router
-from routes.studygroup_routes import router as studygroup_router
+from routes.studygroup_routes import (
+    get_upcoming_sessions_for_user,
+    router as studygroup_router,
+)
 from routes.chat_routes import router as chat_router
 from routes.course_routes import router as course_router
 from routes.match_routes import router as match_router
@@ -20,6 +24,9 @@ from db import get_db_connection as get_db
 
 # Load environment variables
 load_dotenv()
+
+# Signed cookie session (same-site with Vite dev server + credentials: include)
+SESSION_SECRET = os.getenv("SESSION_SECRET", "dev-only-change-me-shipmates")
 
 
 def seed_admin_user():
@@ -69,6 +76,13 @@ def create_app():
     # Serve uploaded files statically
     app.mount("/uploads", StaticFiles(directory=upload_folder), name="uploads")
 
+    # Session first (inner); CORS outer — browser sends session cookie on cross-port localhost
+    app.add_middleware(
+        SessionMiddleware,
+        secret_key=SESSION_SECRET,
+        same_site="lax",
+        https_only=False,
+    )
     # Allow vite dev server to talk to the backend
     app.add_middleware(
         CORSMiddleware,
@@ -91,6 +105,13 @@ def create_app():
     app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
     app.include_router(user_router, prefix="/user", tags=["User Profile"])
     app.include_router(studygroup_router, prefix="/groups", tags=["Study Groups"])
+    # Legacy path (older frontend); canonical: GET /groups/sessions/upcoming
+    app.add_api_route(
+        "/sessions/upcoming",
+        get_upcoming_sessions_for_user,
+        methods=["GET"],
+        tags=["Study Groups"],
+    )
     app.include_router(chat_router, prefix="/groups", tags=["Chat"])
     app.include_router(course_router, prefix="/courses", tags=["Courses"])
     app.include_router(match_router, prefix="/match", tags=["Study Buddy Matching"])

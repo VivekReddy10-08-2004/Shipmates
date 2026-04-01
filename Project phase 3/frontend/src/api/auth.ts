@@ -12,7 +12,12 @@ export async function registerUser(formData: { first_name: string; last_name: st
 
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
-    throw new Error(data.error || "Registration failed");
+    const msg =
+      (typeof data.detail === "string" && data.detail) ||
+      (Array.isArray(data.detail) && data.detail[0]?.msg) ||
+      data.error ||
+      "Registration failed";
+    throw new Error(msg);
   }
 
   return response.json();
@@ -28,7 +33,12 @@ export async function loginUser(formData: { email: string; password: string; }) 
 
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
-    throw new Error(data.error || "Login failed");
+    const msg =
+      (typeof data.detail === "string" && data.detail) ||
+      (Array.isArray(data.detail) && data.detail[0]?.msg) ||
+      data.error ||
+      "Login failed";
+    throw new Error(msg);
   }
 
   return response.json();
@@ -43,7 +53,11 @@ export async function logoutUser() {
 
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
-    throw new Error(data.error || "Logout failed");
+    const msg =
+      (typeof data.detail === "string" && data.detail) ||
+      data.error ||
+      "Logout failed";
+    throw new Error(msg);
   }
 
   window.location.href = "/";
@@ -54,7 +68,11 @@ export async function fetchColleges() {
 
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
-    throw new Error(data.error || "Failed to load colleges");
+    const msg =
+      (typeof data.detail === "string" && data.detail) ||
+      data.error ||
+      "Failed to load colleges";
+    throw new Error(msg);
   }
 
   return response.json();
@@ -65,7 +83,11 @@ export async function fetchMajors() {
 
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
-    throw new Error(data.error || "Failed to load majors");
+    const msg =
+      (typeof data.detail === "string" && data.detail) ||
+      data.error ||
+      "Failed to load majors";
+    throw new Error(msg);
   }
 
   return response.json();

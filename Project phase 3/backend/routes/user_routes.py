@@ -1,24 +1,19 @@
 # By Rise Akizaki
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from db import get_db_connection
+from deps import get_current_user_id
 from models import UserResponse, UserUpdate
 
 router = APIRouter()
 
 
 @router.get("/account", response_model=UserResponse)
-def get_account_data(user_id: int):
+def get_account_data(user_id: int = Depends(get_current_user_id)):
     """
     Get user account information including college and major details.
-    Query param: user_id
+    Requires session (set at POST /auth/login).
     """
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="user_id is required",
-        )
-
     connection = get_db_connection()
     try:
         cursor = connection.cursor(dictionary=True)
@@ -63,16 +58,13 @@ def get_account_data(user_id: int):
 
 
 @router.put("/account", response_model=dict, status_code=status.HTTP_200_OK)
-def update_account(user_id: int, user_update: UserUpdate):
+def update_account(
+    user_update: UserUpdate,
+    user_id: int = Depends(get_current_user_id),
+):
     """
-    Update user account information.
+    Update user account information for the logged-in user.
     """
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="user_id is required",
-        )
-
     connection = get_db_connection()
     try:
         connection.start_transaction()
