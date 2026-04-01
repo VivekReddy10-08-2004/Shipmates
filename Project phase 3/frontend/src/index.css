@@ -1,8 +1,8 @@
 :root {
-  --bg: #134577;
-  --bg-soft: #eff4f8;
-  --card: #ed9913;
-  --card-soft: #f7fafd;
+  --bg: #eaeaea;
+  --bg-soft: #242452;
+  --card: #f8fcff;
+  --card-soft: #ffd15e;
   --accent: #0b3a63;
   --accent-dark: #082b49;
   --accent-soft: #e8f0f8;
@@ -10,9 +10,11 @@
   --highlight-soft: #f3e9d6;
   --danger: #8a3a3a;
   --success: #2f5f82;
-  --border: #d4dee8;
-  --text-main: #1f3144;
-  --text-muted: #5d7187;
+  --border: #ffb348;
+  --text-main: #242452;
+  --text-main-alt: #f8fcff;
+  --text-muted: #92adca;
+  --text-title: #f8fcff;
 }
 
 *,
@@ -25,7 +27,7 @@ body {
   margin: 0;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
-  background: var(--bg);
+  background: var(--bg-soft);
   color: var(--text-main);
 }
 
@@ -43,6 +45,136 @@ body {
   font-weight: 800;
   letter-spacing: 0.02em;
   margin: 0 0 1.75rem;
+  color: var(--text-title);
+}
+
+.page-subtitle {
+  font-size: clamp(1.4rem, 4vw, 2rem);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin: 0 0 1.75rem;
+  color: var(--text-title);
+}
+
+/* Auth Pages - Rise */
+.auth-page {
+  background-color: var(--bg-soft);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.auth-card {
+  background: var(--card);
+  padding: 50px;
+  width: 100%;
+  max-width: 420px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.auth-title {
+  text-align: center;
+  color: var(--bg-soft);
+  margin-bottom: 20px;
+}
+
+.auth-form {
+  background: var(--card);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.auth-input {
+  padding: 12px 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 16px;
+  background-color: color(white);
+  outline: none;
+  border: 1px solid var(--border);
+  width: 100%;
+  filter: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.auth-button {
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: #0ea5e9;
+  color: white;
+  font-size: 16px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.small-alt-button {
+  margin-top: 10px;
+  margin-right: 28px;
+  padding: 10px 14px;
+  background-color: var(--bg-soft);
+  color: white;
+  font-size: 16px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.small-alt-button-light {
+  margin-top: 10px;
+  margin-right: 28px;
+  padding: 10px 14px;
+  background-color: color(white);
+  font-size: 16px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+/* Quizzes */
+.input-quiz {
+  padding: 12px 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 16px;
+  background-color: color(white);
+  outline: none;
+  border: 1px solid var(--border);
+  width: 100%;
+  filter: none;
+  display: flex;
+  flex-direction: column;
+  margin-top: 20px;
+  margin-bottom: 8px;
+}
+
+/* Input Boxes - Rise */
+.input {
+  padding: 12px 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.1);
+  font-size: 16px;
+  background-color: rgba(10, 15, 26, 0.8);
+  color: white;
+  outline: none;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.form-field {
+  width: 100%;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Cards / sections */
@@ -57,6 +189,16 @@ body {
   padding: 1.25rem 1.5rem;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
   border: 1px solid var(--border);
+  margin-top: 16px;
+}
+
+.card-big {
+  background: var(--card);
+  padding: 50px;
+  width: 100%;
+  max-width: 600px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
 }
 
 .card-header {
@@ -180,7 +322,7 @@ input[type="checkbox"] {
 
 .btn-ghost {
   background: transparent;
-  color: var(--text-main);
+  color: var(--text-main-alt);
   border: 1px solid var(--border);
 }
 
@@ -188,10 +330,20 @@ input[type="checkbox"] {
   background: var(--card-soft);
 }
 
+.btn-alt-dark {
+  color: var(--text-main);
+}
+
 /* smaller button variant for headers */
 .btn-sm {
   padding: 0.3rem 0.9rem;
   font-size: 0.82rem;
+}
+
+.btn-sm-2 {
+  padding: 0.3rem 0.9rem;
+  font-size: 0.82rem;
+  color: var(--text-main);
 }
 
 .icon-btn {
@@ -691,6 +843,13 @@ ul.clean-list {
   margin-bottom: 1.2rem;
 }
 
+.hero-standard {
+  max-width: 520px;
+  font-size: 0.96rem;
+  color: var(--text-main);
+  margin-bottom: 1.2rem;
+}
+
 /* Buttons row */
 
 .hero-actions {
@@ -858,6 +1017,7 @@ ul.clean-list {
 .feature-grid-title {
   font-size: 1.1rem;
   margin: 0;
+  color: var(--text-title);
 }
 
 .feature-grid-subtitle {
@@ -1197,7 +1357,7 @@ ul.clean-list {
   border-radius: 999px;
   border: 1px solid var(--border);
   background: #ffffff;
-  color: var(--text-main);
+  color: var(--text-main-alt);
   padding: 0.5rem 0.9rem;
   font-size: 0.95rem;
   outline: none;

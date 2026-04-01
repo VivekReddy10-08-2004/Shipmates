@@ -691,7 +691,7 @@ export default function StudyGroups() {
               <div className="card-title">My Groups</div>
               <button
                 type="button"
-                className="btn btn-ghost btn-sm"
+                className="btn btn-ghost btn-sm-2"
                 onClick={openCalendar}
               >
                 View upcoming sessions
@@ -919,7 +919,7 @@ export default function StudyGroups() {
                     />
                     <button
                       type="submit"
-                      className="btn btn-ghost"
+                      className="btn btn-ghost btn-alt-dark"
                       disabled={inviteJoinLoading}
                     >
                       {inviteJoinLoading ? "Joining..." : "Join with code"}
