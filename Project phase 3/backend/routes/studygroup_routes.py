@@ -4,10 +4,57 @@ from fastapi import APIRouter, HTTPException, status, Query, Body
 from mysql.connector import Error as MySQLError
 import secrets
 from datetime import datetime, date, timedelta
+from decimal import Decimal
 from db import get_db_connection
 from models import CreateStudyGroup
 
 router = APIRouter()
+
+
+def _json_friendly(value):
+    """Ensure MySQL driver values serialize to JSON (Decimal, bytes, enums)."""
+    if value is None:
+        return None
+    if isinstance(value, Decimal):
+        return int(value) if value == value.to_integral_value() else float(value)
+    if isinstance(value, (bytes, bytearray)):
+        return value.decode("utf-8", errors="replace")
+    return value
+
+
+# Same logic as stored procedures GetUserGroups / GetUpcomingSessionsForUser (SQL file may not be applied).
+SQL_GET_USER_GROUPS = """
+SELECT
+    g.group_id,
+    g.group_name,
+    gm.role,
+    u.user_id,
+    CONCAT(u.first_name, ' ', u.last_name) AS user_name
+FROM Group_Member AS gm
+JOIN Study_Group AS g ON g.group_id = gm.group_id
+JOIN Users AS u ON u.user_id = gm.user_id
+WHERE gm.user_id = %s
+ORDER BY g.group_name
+"""
+
+SQL_GET_UPCOMING_SESSIONS = """
+SELECT
+    g.group_name,
+    s.session_date,
+    s.start_time,
+    s.end_time,
+    s.location,
+    u.user_id,
+    CONCAT(u.first_name, ' ', u.last_name) AS user_name
+FROM Group_Member AS gm
+JOIN Study_Session AS s ON s.group_id = gm.group_id
+JOIN Study_Group AS g ON g.group_id = gm.group_id
+JOIN Users AS u ON u.user_id = gm.user_id
+WHERE gm.user_id = %s
+  AND s.session_date >= CURRENT_DATE()
+ORDER BY s.session_date, s.start_time
+LIMIT %s
+"""
 
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=dict)
@@ -187,30 +234,31 @@ def get_my_groups(user_id: int = Query(...)):
 
     try:
         conn = get_db_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(dictionary=True)
 
-        cursor.callproc("GetUserGroups", (user_id,))
+        cursor.execute(SQL_GET_USER_GROUPS, (user_id,))
+        rows = cursor.fetchall() or []
 
         groups = []
-
-        for result in cursor.stored_results():
-            rows = result.fetchall()
-            col_names = result.column_names
-            for row in rows:
-                row_dict = dict(zip(col_names, row))
-                groups.append(
-                    {
-                        "group_id": row_dict["group_id"],
-                        "group_name": row_dict["group_name"],
-                        "role": row_dict["role"],
-                        "user_id": row_dict["user_id"],
-                        "user_name": row_dict["user_name"],
-                    }
-                )
+        for row_dict in rows:
+            groups.append(
+                {
+                    "group_id": _json_friendly(row_dict.get("group_id")),
+                    "group_name": _json_friendly(row_dict.get("group_name")),
+                    "role": _json_friendly(row_dict.get("role")),
+                    "user_id": _json_friendly(row_dict.get("user_id")),
+                    "user_name": _json_friendly(row_dict.get("user_name")),
+                }
+            )
 
         return groups
 
     except MySQLError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e),
@@ -222,46 +270,48 @@ def get_my_groups(user_id: int = Query(...)):
         if conn is not None:
             conn.close()
 
-    """
-    Wraps GetUpcomingSessionsForUser.
-    Query: ?user_id=...&limit=50
-    """
-    user_id = request.args.get("user_id", type=int)
-    limit = request.args.get("limit", default=50, type=int)
 
-    if not user_id:
-        return jsonify({"detail": "user_id is required"}), 400
-
+@router.get("/sessions/upcoming", response_model=list[dict])
+def get_upcoming_sessions_for_user(
+    user_id: int = Query(...),
+    limit: int = Query(50, ge=1, le=500),
+):
+    """Wraps GetUpcomingSessionsForUser. Query: ?user_id=...&limit=50"""
     conn = None
     cursor = None
 
     try:
         conn = get_db_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(dictionary=True)
 
-        cursor.callproc("GetUpcomingSessionsForUser", (user_id, limit))
+        cursor.execute(SQL_GET_UPCOMING_SESSIONS, (user_id, limit))
 
         sessions = []
+        for row_dict in cursor.fetchall() or []:
+            if row_dict.get("session_date") is not None:
+                row_dict["session_date"] = row_dict["session_date"].isoformat()
+            if row_dict.get("start_time") is not None:
+                row_dict["start_time"] = str(row_dict["start_time"])
+            if row_dict.get("end_time") is not None:
+                row_dict["end_time"] = str(row_dict["end_time"])
+            row_dict["group_name"] = _json_friendly(row_dict.get("group_name"))
+            row_dict["location"] = _json_friendly(row_dict.get("location"))
+            row_dict["user_id"] = _json_friendly(row_dict.get("user_id"))
+            row_dict["user_name"] = _json_friendly(row_dict.get("user_name"))
+            sessions.append(row_dict)
 
-        for result in cursor.stored_results():
-            rows = result.fetchall()
-            col_names = result.column_names
-            for row in rows:
-                row_dict = dict(zip(col_names, row))
-
-                if row_dict.get("session_date") is not None:
-                    row_dict["session_date"] = row_dict["session_date"].isoformat()
-                if row_dict.get("start_time") is not None:
-                    row_dict["start_time"] = str(row_dict["start_time"])
-                if row_dict.get("end_time") is not None:
-                    row_dict["end_time"] = str(row_dict["end_time"])
-
-                sessions.append(row_dict)
-
-        return jsonify(sessions), 200
+        return sessions
 
     except MySQLError as e:
-        return jsonify({"detail": str(e)}), 500
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
 
     finally:
         if cursor is not None:

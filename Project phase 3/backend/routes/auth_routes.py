@@ -1,7 +1,7 @@
 # By Rise Akizaki
 
 import traceback
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 import bcrypt
 from db import get_db_connection
 from models import (
@@ -76,8 +76,8 @@ def register_user(user_data: UserRegister):
 
 # ============= USER LOGIN =============
 @router.post("/login", response_model=dict)
-def login_user(user_data: UserLogin):
-    """Authenticate user and return user info."""
+def login_user(user_data: UserLogin, request: Request):
+    """Authenticate user, set session cookie, return user info."""
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
@@ -109,6 +109,8 @@ def login_user(user_data: UserLogin):
         cursor.close()
         connection.close()
 
+        request.session["user_id"] = int(user_id)
+
         return {
             "message": "Login successful! You should be redirected shortly",
             "user": user_info,
@@ -122,6 +124,13 @@ def login_user(user_data: UserLogin):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(exception),
         )
+
+
+@router.post("/logout", response_model=dict)
+def logout_user(request: Request):
+    """Clear session cookie (client should still call with credentials: include)."""
+    request.session.clear()
+    return {"message": "Logged out"}
 
 
 # ============= DATA RETRIEVAL =============

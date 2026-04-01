@@ -66,6 +66,7 @@ export interface Invite {
 // small helper to standardize fetch + error handling
 async function apiFetch(path: string, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
     },
@@ -128,9 +129,9 @@ export async function createGroup(payload: { group_name: string; max_members: nu
 
 // comes from /groups/<id>/join (status/message fields).
 export async function joinGroup(groupId: any, userId: any) {
-  return apiFetch(`/groups/${groupId}/join`, {
+  const q = new URLSearchParams({ user_id: String(userId) });
+  return apiFetch(`/groups/${groupId}/join?${q.toString()}`, {
     method: "POST",
-    body: JSON.stringify({ user_id: userId }),
   });
 }
 
@@ -147,7 +148,7 @@ export async function fetchUpcomingSessions(userId: number | null, p0?: number):
     user_id: String(userId),
   });
 
-  const res = await apiFetch(`/sessions/upcoming?${params.toString()}`);
+  const res = await apiFetch(`/groups/sessions/upcoming?${params.toString()}`);
   return res as unknown as Session[];
 }
 
