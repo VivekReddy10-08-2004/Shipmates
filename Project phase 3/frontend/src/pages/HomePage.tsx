@@ -159,12 +159,12 @@ export default function HomePage() {
       {/* top section */}
       <section className="hero hero-gamified">
         <div className="hero-left">
-          <h1 className="page-title">StudyBuddy Hub</h1>
+          <h1 className="page-title">Shipmates</h1>
 
           {/* description */}
           <p className="hero-subtitle">Study how you want.</p>
 
-          <p className="hero-body-text">Welcome to StudyBuddy! Studybuddy makes it 
+          <p className="hero-body-text">Welcome to Shipmates! Shipmates makes it 
             easier for students to study. We offer many features such as study groups,
             quizzes, flashcards, and more! If you are a student looking for academic
             resources, click resources below. If you are looking to get started on studying,
@@ -256,9 +256,9 @@ export default function HomePage() {
         <div className="feature-grid-header">
           <h2 className="feature-grid-title">Choose your path</h2>
           <p className="feature-grid-subtitle"> {/*p2 doesn't exist, so had to change it to jsut p - Rise*/}
-            We offer many features in StudyBuddy. You can create your owner
+            We offer many features in Shipmates. You can create your owner
             quizzes or flashcards, use our study tools, find or create a study
-            group, or find the perfect sutdy partner on StudyBuddy Match!
+            group, or find the perfect sutdy partner on Shipmates Match!
           </p>
         </div>
 
@@ -381,7 +381,7 @@ export default function HomePage() {
                 <div className="feature-card-icon-placeholder">
                   <img src={MatcherIcon} alt="StudyBuddy Match logo" />
                 </div>
-                <div className="card-title">StudyBuddy Match</div>
+                <div className="card-title">Shipmates Match</div>
               </div>
             </div>
 
@@ -398,7 +398,7 @@ export default function HomePage() {
                 type="button"
                 onClick={() => navigate("/match")}
               >
-                StudyBuddy Match
+                Shipmates Match
               </button>
             </div>
           </section>
