@@ -5,7 +5,7 @@ export default function NavBar() {
     <header className="navbar">
       <div className="nav-left">
         <span className="nav-logo-dot" />
-        <span className="nav-title">StudyBuddy Hub</span>
+        <span className="nav-title">Shipmates</span>
       </div>
 
       <nav className="nav-right">
@@ -44,7 +44,7 @@ export default function NavBar() {
             "nav-link" + (isActive ? " nav-link-active" : "")
           }
         >
-          StudyBuddy Match
+          Shipmates Match
         </NavLink>
 
         <NavLink

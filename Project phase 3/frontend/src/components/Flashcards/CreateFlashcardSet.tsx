@@ -24,6 +24,8 @@ export default function CreateFlashcardSet({ onSetCreated }) {
 
   const addCard = () => setCards((c) => [...c, { front: "", back: "" }]);
 
+  const deleteCard = (idx: number) => setCards((c) => c.filter((_, i) => i !== idx));
+
   const submit = async () => {
     setStatus({ type: "info", text: "Saving..." }); // need to specify a known type (ie, StatusType) - Rise
     try {
@@ -78,6 +80,11 @@ export default function CreateFlashcardSet({ onSetCreated }) {
             onChange={(e) => updateCard(i, "back", e.target.value)} 
             className="auth-input"
             style={{ flex: 1 }} />
+          <label>
+            <input type="checkbox" 
+              onChange={(e) => deleteCard(i)} 
+            /> Delete Answer
+          </label>
         </div>
       ))}
 

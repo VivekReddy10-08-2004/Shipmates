@@ -14,7 +14,7 @@ export default function FlashcardsPage() {
 
   return (
     <div style={{ padding: 20 }}>
-      <h1>Flashcards</h1>
+      <h1 className="page-title">Flashcards</h1>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         <div>
           <CreateFlashcardSet onSetCreated={handleSetCreated} />
