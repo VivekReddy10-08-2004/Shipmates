@@ -4,9 +4,11 @@ import PracticeFlashcards from "../components/Flashcards/PracticeFlashcards.jsx"
 import type { FlashcardSet } from "../api/flashcards.js";
 import { generateFromNotes, approveGeneratedDraft } from "../api/generate.js";
 import { searchCourses } from "../api/studygroups.js";
+import useCurrentUser from "../hooks/useCurrentUser.js";
 
 export default function FlashcardsPage() {
   const practiceRef = useRef<FlashcardSet | null>(null);
+  const { user } = useCurrentUser();
 
   const [generateCourseId, setGenerateCourseId] = useState("");
   const [courseQuery, setCourseQuery] = useState("");
@@ -66,12 +68,16 @@ export default function FlashcardsPage() {
     setApproveSuccess("");
 
     try {
+      if (!user?.user_id) {
+        throw new Error("No logged-in user found");
+      }
+
       if (!generateCourseId) {
         throw new Error("Please select a course");
       }
 
       const data = await generateFromNotes({
-        user_id: 1009,
+        user_id: Number(user.user_id),
         course_id: Number(generateCourseId),
         raw_text: generateNotes,
       });
@@ -91,13 +97,17 @@ export default function FlashcardsPage() {
     setApproveSuccess("");
 
     try {
+      if (!user?.user_id) {
+        throw new Error("No logged-in user found");
+      }
+
       if (!generatedDraftSetId) {
         throw new Error("No draft set to approve");
       }
 
       const result = await approveGeneratedDraft({
         draft_set_id: generatedDraftSetId,
-        creator_id: 1009,
+        creator_id: Number(user.user_id),
       });
 
       setApproveSuccess(

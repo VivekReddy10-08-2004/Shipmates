@@ -1,39 +1,45 @@
 import React, { useEffect, useState } from "react";
+import useCurrentUser from "../../hooks/useCurrentUser.js";
 import { listQuizzes, getQuiz, submitQuiz, type Quiz, type Score } from "../../api/quizzes.js";
 
 export default function TakeQuiz() {
+  const { user } = useCurrentUser();
+
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [selectedQuiz, setSelectedQuiz] = useState<Quiz | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [answers, setAnswers] = useState({});
+  const [answers, setAnswers] = useState<Record<number, number>>({});
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState<Score | null>(null);
 
   useEffect(() => {
     setLoading(true);
-    listQuizzes()
-      .then(setQuizzes)
-      .catch((err) => {
-        setError(typeof err === 'string' ? err : 'Failed to load quizzes');
+    listQuizzes(1, 20, user?.user_id)
+      .then((data: any) => {
+        const items = data.items || data;
+        setQuizzes(items);
+      })
+      .catch((err: unknown) => {
+        setError(typeof err === "string" ? err : "Failed to load quizzes");
         setQuizzes([]);
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [user?.user_id]);
 
-  const openQuiz = async (quizId) => {
+  const openQuiz = async (quizId: number) => {
     try {
       setError(null);
       setSubmitted(false);
       setAnswers({});
       const quiz = await getQuiz(quizId);
       setSelectedQuiz(quiz);
-    } catch (err : unknown) {
-      setError(typeof err === 'string' ? err : 'Failed to load quiz');
+    } catch (err: unknown) {
+      setError(typeof err === "string" ? err : "Failed to load quiz");
     }
   };
 
-  const handleSelectAnswer = (questionId, answerId) => {
+  const handleSelectAnswer = (questionId: number, answerId: number) => {
     setAnswers({
       ...answers,
       [questionId]: answerId,
@@ -41,22 +47,27 @@ export default function TakeQuiz() {
   };
 
   const handleSubmit = async () => {
-    if (!selectedQuiz) { // needed, since selectedQuiz is possibly null
+    if (!selectedQuiz) {
       setError("No quiz selected");
+      return;
+    }
+
+    if (!user?.user_id) {
+      setError("No logged-in user found");
       return;
     }
 
     try {
       setError(null);
       const result = await submitQuiz({
-        user_id: 1,
+        user_id: Number(user.user_id),
         quiz_id: selectedQuiz.quiz_id,
         answers: answers,
       });
       setScore(result);
       setSubmitted(true);
-    } catch (err) {
-      setError(typeof err === 'string' ? err : 'Failed to submit quiz');
+    } catch (err: unknown) {
+      setError(typeof err === "string" ? err : "Failed to submit quiz");
     }
   };
 
@@ -72,10 +83,10 @@ export default function TakeQuiz() {
           )}
 
           <div style={{ marginTop: "1rem" }}>
-            {quizzes.map((q) => (
+            {quizzes.map((q: any) => (
               <button
-                key={q.id}
-                onClick={() => openQuiz(q.id)}
+                key={q.quiz_id ?? q.id}
+                onClick={() => openQuiz(q.quiz_id ?? q.id)}
                 style={{
                   display: "block",
                   width: "100%",
@@ -90,7 +101,7 @@ export default function TakeQuiz() {
                   transition: "all 0.2s ease",
                 }}
                 onMouseEnter={(e) => {
-                  const target = e.target as HTMLElement; // needs to be cast as an HTMLElement - Rise
+                  const target = e.target as HTMLElement;
                   target.style.background = "rgba(14,165,233,0.2)";
                   target.style.borderColor = "rgba(14,165,233,0.5)";
                 }}
@@ -119,18 +130,22 @@ export default function TakeQuiz() {
   const answeredQuestions = Object.keys(answers).length;
 
   if (submitted && score) {
-    const percentage = score.max_score > 0 ? Math.round((score.score / score.max_score) * 100) : 0;
+    const percentage =
+      score.max_score > 0 ? Math.round((score.score / score.max_score) * 100) : 0;
+
     return (
       <div className="card" style={{ marginTop: "2rem" }}>
         <h3>{selectedQuiz.title}</h3>
-        <div style={{
-          background: "rgba(34,197,94,0.1)",
-          border: "1px solid rgba(34,197,94,0.3)",
-          borderRadius: "0.75rem",
-          padding: "2rem",
-          textAlign: "center",
-          marginBottom: "2rem",
-        }}>
+        <div
+          style={{
+            background: "rgba(34,197,94,0.1)",
+            border: "1px solid rgba(34,197,94,0.3)",
+            borderRadius: "0.75rem",
+            padding: "2rem",
+            textAlign: "center",
+            marginBottom: "2rem",
+          }}
+        >
           <div style={{ fontSize: "3rem", color: "#22c55e", marginBottom: "1rem" }}>
             {percentage}%
           </div>
@@ -164,7 +179,13 @@ export default function TakeQuiz() {
 
   return (
     <div className="card" style={{ marginTop: "2rem" }}>
-      <div style={{ marginBottom: "1.5rem", paddingBottom: "1rem", borderBottom: "1px solid rgba(148,163,184,0.3)" }}>
+      <div
+        style={{
+          marginBottom: "1.5rem",
+          paddingBottom: "1rem",
+          borderBottom: "1px solid rgba(148,163,184,0.3)",
+        }}
+      >
         <h3 style={{ margin: 0, marginBottom: "0.5rem" }}>{selectedQuiz.title}</h3>
         {selectedQuiz.description && (
           <div style={{ fontSize: "0.9rem", color: "#9ca3af" }}>{selectedQuiz.description}</div>
@@ -177,13 +198,14 @@ export default function TakeQuiz() {
       {error && <div style={{ color: "#f97373", marginBottom: "1rem" }}>{error}</div>}
 
       <div style={{ maxHeight: "600px", overflowY: "auto", marginBottom: "2rem" }}>
-        {questions.map((question, idx) => (
+        {questions.map((question: any, idx: number) => (
           <div
             key={question.question_id}
             style={{
               marginBottom: "2rem",
               paddingBottom: "1.5rem",
-              borderBottom: idx < questions.length - 1 ? "1px solid rgba(148,163,184,0.2)" : "none",
+              borderBottom:
+                idx < questions.length - 1 ? "1px solid rgba(148,163,184,0.2)" : "none",
             }}
           >
             <div style={{ marginBottom: "1rem" }}>
@@ -196,7 +218,7 @@ export default function TakeQuiz() {
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-              {(question.answers || []).map((answer) => (
+              {(question.answers || []).map((answer: any) => (
                 <label
                   key={answer.answer_id}
                   style={{

@@ -1,103 +1,203 @@
 import React, { useState } from "react";
-import { createFlashcardSet, type Flashcard } from "../../api/flashcards.js";
+import { createFlashcardSet } from "../../api/flashcards.js";
+import useCurrentUser from "../../hooks/useCurrentUser.js";
 
-export default function CreateFlashcardSet({ onSetCreated }) {
+type CardInput = {
+  front: string;
+  back: string;
+};
+
+type StatusType = {
+  kind: "info" | "success" | "error";
+  text: string;
+};
+
+type Props = {
+  onSetCreated?: () => void;
+};
+
+export default function CreateFlashcardSet({ onSetCreated }: Props) {
+  const { user } = useCurrentUser();
+
   const [title, setTitle] = useState("");
-  const [creatorId, setCreatorId] = useState(1); // default for testing
-  const [cards, setCards] = useState([{ front: "", back: "" }]);
+  const [description, setDescription] = useState("");
+  const [courseId, setCourseId] = useState(1);
 
-  type StatusType = {
-    type: "info" | "success" | "error";
-    text: string;
-  };
+  const [cards, setCards] = useState<CardInput[]>([
+    { front: "", back: "" },
+  ]);
 
   const [status, setStatus] = useState<StatusType | null>(null);
 
-  const updateCard = (idx: number, key: keyof Flashcard, value: any) => {
-    const next = [...cards];
-    const card = next[idx];
-    if (card) { // Had to add a check for undefined object
-      card[key] = value;
-      setCards(next);
-    }
+  const updateCardFront = (index: number, value: string) => {
+    setCards((prev) =>
+      prev.map((c, i) => (i === index ? { ...c, front: value } : c))
+    );
   };
 
-  const addCard = () => setCards((c) => [...c, { front: "", back: "" }]);
+  const updateCardBack = (index: number, value: string) => {
+    setCards((prev) =>
+      prev.map((c, i) => (i === index ? { ...c, back: value } : c))
+    );
+  };
+
+  const addCard = () => {
+    setCards((prev) => [...prev, { front: "", back: "" }]);
+  };
+
+  const removeCard = (index: number) => {
+    if (cards.length <= 1) return;
+    setCards((prev) => prev.filter((_, i) => i !== index));
+  };
 
   const submit = async () => {
-    setStatus({ type: "info", text: "Saving..." }); // need to specify a known type (ie, StatusType) - Rise
+    setStatus({ kind: "info", text: "Saving..." });
+
     try {
-      const payload = { title, creator_id: creatorId, flashcards: cards.map(c => ({ front: c.front, back: c.back })) };
-      const res = await createFlashcardSet(payload);
-      setStatus({ type: "success", text: `Saved (set id ${res.set_id || res.setId || 'unknown'})` });
+      if (!title.trim()) {
+        throw new Error("Set title is required");
+      }
+
+      const creatorId = user?.user_id ?? 1;
+
+      // Filter out empty cards
+      const validCards = cards.filter(
+        (c) => c.front.trim() && c.back.trim()
+      );
+
+      const res = await createFlashcardSet({
+        title: title.trim(),
+        ...(description.trim() ? { description: description.trim() } : {}),
+        course_id: courseId,
+        creator_id: creatorId,
+        flashcards: validCards,
+      });
+
+      setStatus({
+        kind: "success",
+        text: `Created flashcard set ${res.set_id ?? ""}`.trim(),
+      });
+
+      // Reset form
       setTitle("");
+      setDescription("");
+      setCourseId(1);
       setCards([{ front: "", back: "" }]);
-      // Notify parent to reload the flashcard list
+
+      // Tell parent to refresh the list
       if (onSetCreated) {
         onSetCreated();
       }
-    } catch (e: unknown) { 
-      let text: string;
+    } catch (e: unknown) {
+      let text = "Failed to save flashcard set";
 
-      if (typeof e === "string") {
+      if (e instanceof Error) {
+        text = e.message;
+      } else if (typeof e === "string") {
         text = e;
-      } else if (e && typeof e === "object" && "error" in e) {
-        // TypeScript now knows e has 'error'
-        text = (e as { error?: string }).error || JSON.stringify(e);
-      } else if (e && typeof e === "object" && "message" in e) {
-        text = (e as { message?: string }).message || JSON.stringify(e);
-      } else {
-        text = JSON.stringify(e);
       }
 
-      setStatus({ type: "error", text });
+      setStatus({ kind: "error", text });
     }
   };
 
   return (
-    <div className="card" style={{ maxWidth: 700 }}>
-      <h3>Create Flashcard Set</h3>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <input style={{ flex: 1 }} 
-          placeholder="Set title" 
-          value={title} 
-          onChange={(e) => setTitle(e.target.value)} 
-          className="auth-input"/>
-        <input style={{ width: 110 }} type="number" value={creatorId} onChange={(e) => setCreatorId(parseInt(e.target.value || '0'))} />
+    <div>
+      <h3 className="page-subtitle">Create Flashcard Set</h3>
+
+      <div className="card" style={{ marginBottom: "1rem" }}>
+        <input
+          className="auth-input"
+          style={{ width: "100%", marginBottom: "0.75rem" }}
+          placeholder="Set title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+        />
+
+        <input
+          className="auth-input"
+          style={{ width: "100%", marginBottom: "0.75rem" }}
+          placeholder="Description (optional)"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+        />
+
+        <input
+          className="auth-input"
+          type="number"
+          placeholder="Course ID"
+          value={courseId}
+          onChange={(e) => setCourseId(parseInt(e.target.value || "0", 10))}
+          style={{ width: "120px" }}
+        />
       </div>
 
-      {cards.map((c, i) => (
-        <div key={i} style={{ marginTop: 8, display: 'flex', gap: 8 }}>
-          <input placeholder="Front" 
-            value={c.front} 
-            onChange={(e) => updateCard(i, "front", e.target.value)} 
+      {cards.map((card, index) => (
+        <div className="card" style={{ marginBottom: "1rem" }} key={index}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "0.5rem",
+            }}
+          >
+            <span style={{ fontSize: "0.85rem", color: "#9ca3af" }}>
+              Card {index + 1}
+            </span>
+            {cards.length > 1 && (
+              <button
+                onClick={() => removeCard(index)}
+                style={{
+                  padding: "0.2rem 0.5rem",
+                  borderRadius: "0.3rem",
+                  border: "none",
+                  background: "rgba(239,68,68,0.2)",
+                  color: "#fca5a5",
+                  cursor: "pointer",
+                  fontSize: "0.75rem",
+                }}
+              >
+                Remove
+              </button>
+            )}
+          </div>
+
+          <input
             className="auth-input"
-            style={{ flex: 1 }} />
-          <input placeholder="Back" 
-            value={c.back} 
-            onChange={(e) => updateCard(i, "back", e.target.value)} 
+            style={{ width: "100%", marginBottom: "0.5rem" }}
+            placeholder="Front (question/term)"
+            value={card.front}
+            onChange={(e) => updateCardFront(index, e.target.value)}
+          />
+
+          <input
             className="auth-input"
-            style={{ flex: 1 }} />
+            style={{ width: "100%" }}
+            placeholder="Back (answer/definition)"
+            value={card.back}
+            onChange={(e) => updateCardBack(index, e.target.value)}
+          />
         </div>
       ))}
 
-      <div style={{ marginTop: 12 }}>
-        <button onClick={addCard} 
-          className="small-alt-button">
-            Add Card
+      <div className="card">
+        <button onClick={addCard}>Add Card</button>
+        <button onClick={submit} style={{ marginLeft: "0.75rem" }}>
+          Save Flashcard Set
         </button>
-        <button onClick={submit} 
-          style={{ marginLeft: 8 }} 
-          className="small-alt-button">
-            Save Set
-        </button>
-      </div>
 
-      {status && (
-        <div style={{ marginTop: 8 }}>
-          <strong>{status.type === 'error' ? 'Error: ' : ''}</strong>{status.text}
-        </div>
-      )}
+        {status && (
+          <div
+            style={{
+              marginTop: "1rem",
+              color: status.kind === "error" ? "#f87171" : undefined,
+            }}
+          >
+            {status.kind === "error" ? `Error: ${status.text}` : status.text}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
