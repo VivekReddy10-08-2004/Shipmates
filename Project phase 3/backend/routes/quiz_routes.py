@@ -203,6 +203,94 @@ def get_quiz(quiz_id: int):
             pass
 
 
+class UpdateQuizRequest(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+
+
+@router.put("/{quiz_id}", response_model=dict)
+def update_quiz(quiz_id: int, payload: UpdateQuizRequest):
+    """Update a quiz's title and/or description."""
+    conn = get_db_connection()
+    if not conn:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database connection failed",
+        )
+
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT quiz_id FROM quiz WHERE quiz_id = %s", (quiz_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quiz not found")
+
+        fields, values = [], []
+        if payload.title is not None:
+            fields.append("title = %s")
+            values.append(payload.title)
+        if payload.description is not None:
+            fields.append("description = %s")
+            values.append(payload.description)
+
+        if fields:
+            values.append(quiz_id)
+            cursor.execute(f"UPDATE quiz SET {', '.join(fields)} WHERE quiz_id = %s", values)
+
+        return {"message": "Quiz updated"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+@router.delete("/{quiz_id}", response_model=dict)
+def delete_quiz(quiz_id: int):
+    """Delete a quiz and all its questions and answers."""
+    conn = get_db_connection()
+    if not conn:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database connection failed",
+        )
+
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT quiz_id FROM quiz WHERE quiz_id = %s", (quiz_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quiz not found")
+
+        # Delete answers -> questions -> quiz (FK order)
+        cursor.execute(
+            "DELETE a FROM answer a JOIN question q ON a.question_id = q.question_id WHERE q.quiz_id = %s",
+            (quiz_id,),
+        )
+        cursor.execute("DELETE FROM question WHERE quiz_id = %s", (quiz_id,))
+        cursor.execute("DELETE FROM quiz WHERE quiz_id = %s", (quiz_id,))
+        return {"message": "Quiz deleted"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
 @router.post("/submit", status_code=status.HTTP_200_OK, response_model=dict)
 def submit_quiz(payload: SubmitQuizRequest):
     """Submit a completed quiz with answers as JSON body."""
