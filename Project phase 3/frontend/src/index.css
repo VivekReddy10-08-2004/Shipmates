@@ -736,6 +736,11 @@ ul.clean-list {
   box-shadow: 0 0 8px rgba(30, 58, 95, 0.35);
 }
 
+.nav-logo-img {
+  width: 48px;
+  height: 48px;
+}
+
 .nav-title {
   font-weight: 700;
   letter-spacing: 0.03em;
