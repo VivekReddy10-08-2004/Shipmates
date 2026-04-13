@@ -30,6 +30,18 @@ export default function CreateQuiz() {
     }
   };
 
+  const deleteQuestion = (qi: number) => {
+    setQuestions(questions.filter((_, i) => i !== qi));
+  };
+
+  const removeAnswer = (qi: number, ai: number) => {
+    const next = [...questions];
+    if (next[qi]) {
+      next[qi].answers = next[qi].answers.filter((_, i) => i !== ai);
+      setQuestions(next);
+    }
+  };
+
   const submit = async () => {
     setStatus("Saving...");
     try {
@@ -51,9 +63,8 @@ export default function CreateQuiz() {
           className="input-quiz"
         />
       </div>
-      <div className="card">
         {questions.map((q, qi) => (
-          <div key={qi}>
+          <div className="card" key={qi}>
             <input placeholder=
               {`Question ${qi + 1}`} 
               value={q.text} 
@@ -85,14 +96,24 @@ export default function CreateQuiz() {
                     }} 
                     /> Correct
                   </label>
+                  <label>
+                    <input type="checkbox" onChange={(e) => {
+                      const next = [...questions];
+                      if (next[qi]?.answers[ai]) {
+                        removeAnswer(qi, ai);
+                      }
+                    }} 
+                    /> Delete Answer
+                  </label>
                 </div>
               ))}
               <button onClick={() => addAnswer(qi)} className="small-alt-button-light">Add Answer</button>
+              <button onClick={() => deleteQuestion(qi)} className="small-alt-button-light">Delete Question</button>
+
             </div>
           </div>
         ))}
         {status && <div style={{ marginTop: 8 }}>{status}</div>}
-      </div>
       <div className="card">
         <div>
           <button onClick={addQuestion} 

@@ -599,7 +599,7 @@ export default function StudyBuddyMatch() {
           marginBottom: "0.5rem",
         }}
       >
-        <h1 className="page-title">StudyBuddy Match</h1>
+        <h1 className="page-title">Shipmates Match</h1>
 
         {hasProfile && (
           <button
@@ -623,7 +623,7 @@ export default function StudyBuddyMatch() {
             </div>
 
             <p className="hero-standard">
-              Tell StudyBuddy how you like to learn, when you&apos;re free, and
+              Tell Shipmates how you like to learn, when you&apos;re free, and
               which courses you&apos;re focused on. We&apos;ll suggest compatible
               study partners from your college first, then beyond.
             </p>
