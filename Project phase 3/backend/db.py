@@ -9,9 +9,9 @@ def get_db_connection():
     return mysql.connector.connect(
         host=os.getenv("MYSQL_HOST", "localhost"),
         port=int(os.getenv("MYSQL_PORT", 3306)),
-        user=os.getenv("MYSQL_USER", "user"),
+        user=os.getenv("MYSQL_USER", "root"),
         # Use env var when present; fallback matches the password you provided
-        password=os.getenv("MYSQL_PASSWORD", "12345"),
+        password=os.getenv("MYSQL_PASSWORD", "vivek@143"),
         database=os.getenv("MYSQL_DB", "StudyBuddy"),
         autocommit=True # need this because saving profile changes kept getting locked
     )
