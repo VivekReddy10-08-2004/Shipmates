@@ -1,9 +1,10 @@
 // jacob craig
+// Fixed: DM paths changed from /dm/ to /messages/ to match backend prefix
 
 import type { Key, ReactNode } from "react";
 import { API_BASE } from "./base.js";
 
-// Empty interfaces because I have no idea what variables go here. I just did quick fixes to fill them in. fill in later I suppose - Rise
+// Interfaces
 export interface Match {
   bio: string;
   study_goal: string;
@@ -15,7 +16,6 @@ export interface Match {
   last_name: string;
   first_name: string;
   other_user_id: number;
-
 }
 
 export interface Partner {
@@ -25,15 +25,14 @@ export interface Partner {
 }
 
 export interface Conversation {
-  conversation_id: number; 
+  conversation_id: number;
   requestStatus: string;
-  partner: Partner; 
-  hasSentInitial: boolean; 
+  partner: Partner;
+  hasSentInitial: boolean;
   isYouRequester: boolean;
   isRequestFlow: boolean;
-  last_message?: string; // optional field so StuddyBuddyMatch doesn't complain that fields don't match - Rise
+  last_message?: string;
 }
-
 
 export interface Message {
   last_name: string;
@@ -42,17 +41,13 @@ export interface Message {
   content: ReactNode;
   message_id: Key | null | undefined;
   sender_user_id: number | undefined;
-
 }
 
 export interface MessageRequest {
   map: any;
   length: number;
-
 }
 
-// small helper to standardize fetch + error handling
-// Had to change it so apiFetch is generic, since it was complaining that the types were not matching - Rise
 async function apiFetch<T = any>(path: string, options = {}): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { "Content-Type": "application/json" },
@@ -67,7 +62,10 @@ async function apiFetch<T = any>(path: string, options = {}): Promise<T> {
   }
 
   if (!res.ok) {
-    const msg = (data as any).detail || "Request failed";
+    const detail = (data as any).detail;
+    const msg = Array.isArray(detail)
+      ? detail.map((e: any) => e.msg ?? JSON.stringify(e)).join("; ")
+      : (typeof detail === "string" ? detail : null) ?? "Request failed";
     throw new Error(msg);
   }
 
@@ -95,10 +93,6 @@ export async function saveMatchProfile(payload: any) {
 
 type UploadResponse = { url: string } | { detail?: string };
 
-/**
- * Upload a profile image file
- * Returns: { url }
- */
 export async function uploadProfileImage(file: string | Blob): Promise<{ url: string }> {
   const formData = new FormData();
   formData.append("file", file);
@@ -108,7 +102,7 @@ export async function uploadProfileImage(file: string | Blob): Promise<{ url: st
     body: formData,
   });
 
-  let data: UploadResponse = {};  // had to change this since it returned the wrong value - Rise
+  let data: UploadResponse = {};
   try {
     data = await res.json();
   } catch {
@@ -120,7 +114,7 @@ export async function uploadProfileImage(file: string | Blob): Promise<{ url: st
     throw new Error(msg);
   }
 
-  return data as { url: string }; // { url }
+  return data as { url: string };
 }
 
 export async function fetchMatchSuggestions(userId: any, limit = 20) {
@@ -132,13 +126,16 @@ export async function fetchMatchSuggestions(userId: any, limit = 20) {
   return apiFetch(`/match/suggestions?${params.toString()}`);
 }
 
+// ---- DM endpoints: prefix is /messages (matches backend mount) ----
+
 export async function startConversation(requesterUserId: any, targetUserId: any) {
-  return apiFetch("/dm/start", {
+  const params = new URLSearchParams({
+    requester_user_id: String(requesterUserId),
+    target_user_id: String(targetUserId),
+  });
+
+  return apiFetch(`/messages/start?${params.toString()}`, {
     method: "POST",
-    body: JSON.stringify({
-      requester_user_id: requesterUserId,
-      target_user_id: targetUserId,
-    }),
   });
 }
 
@@ -146,19 +143,19 @@ export async function fetchDirectMessages(conversationId: any, limit = 50) {
   const params = new URLSearchParams({
     limit: String(limit),
   });
-  return apiFetch(`/dm/${conversationId}/messages?${params.toString()}`);
+  return apiFetch(`/messages/${conversationId}/messages?${params.toString()}`);
 }
 
 export async function sendDirectMessage(conversationId: any, senderUserId: any, content: any) {
-  return apiFetch(`/dm/${conversationId}/messages`, {
+  const params = new URLSearchParams({
+    sender_user_id: String(senderUserId),
+    content: content,
+  });
+
+  return apiFetch(`/messages/${conversationId}/messages?${params.toString()}`, {
     method: "POST",
-    body: JSON.stringify({
-      sender_user_id: senderUserId,
-      content,
-    }),
   });
 }
-
 
 export async function fetchInbox(userId: number, limit = 50): Promise<Conversation[]> {
   const params = new URLSearchParams({
@@ -166,24 +163,27 @@ export async function fetchInbox(userId: number, limit = 50): Promise<Conversati
     limit: String(limit),
   });
 
-  const res = await apiFetch<{ courses?: Conversation[] }>(`/dm/inbox?${params.toString()}`);
-  return res.courses || [];
+  return apiFetch<Conversation[]>(`/messages/inbox?${params.toString()}`);
 }
+
 export async function fetchMessageRequests(userId: any, limit = 50) {
   const params = new URLSearchParams({
     user_id: String(userId),
     limit: String(limit),
   });
-  return apiFetch(`/dm/requests?${params.toString()}`);
+  return apiFetch(`/messages/requests?${params.toString()}`);
 }
 
 export async function respondToMessageRequest(requestId: any, action: any, userId: any) {
+  const params = new URLSearchParams({
+    user_id: String(userId),
+  });
+
   const res = await fetch(
-    `${API_BASE}/dm/requests/${requestId}/${action}`,
+    `${API_BASE}/messages/requests/${requestId}/${action}?${params.toString()}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user_id: userId }),
     }
   );
 

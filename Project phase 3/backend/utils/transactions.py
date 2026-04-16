@@ -137,3 +137,185 @@ def submit_quiz_transaction(user_id, quiz_id, answers_dict):
     finally:
         cursor.close()
         conn.close()
+
+
+def approve_ai_draft_transaction(conn, draft_set_id: int, creator_id: int):
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        conn.start_transaction()
+
+        cursor.execute("""
+            SELECT draft_set_id, user_id, course_id, source_text, status
+            FROM ai_draft_set
+            WHERE draft_set_id = %s
+        """, (draft_set_id,))
+        draft_set = cursor.fetchone()
+
+        if not draft_set:
+            raise ValueError("Draft set not found")
+
+        if draft_set["status"] != "draft":
+            raise ValueError("Draft set is not in draft status")
+
+        cursor.execute("""
+            SELECT draft_flashcard_id, front_text, back_text
+            FROM ai_draft_flashcard
+            WHERE draft_set_id = %s
+            ORDER BY draft_flashcard_id ASC
+        """, (draft_set_id,))
+        draft_flashcards = cursor.fetchall()
+
+        cursor.execute("""
+            INSERT INTO flashcardset (title, description, course_id, creator_id)
+            VALUES (%s, %s, %s, %s)
+        """, (
+            "AI Generated Flashcards",
+            "Approved from AI draft set",
+            draft_set["course_id"],
+            creator_id
+        ))
+        real_set_id = cursor.lastrowid
+
+        for card in draft_flashcards:
+            cursor.execute("""
+                INSERT INTO flashcard (set_id, front_text, back_text)
+                VALUES (%s, %s, %s)
+            """, (
+                real_set_id,
+                card["front_text"],
+                card["back_text"]
+            ))
+
+        cursor.execute("""
+            SELECT draft_question_id, question_text, question_type, points
+            FROM ai_draft_question
+            WHERE draft_set_id = %s
+            ORDER BY draft_question_id ASC
+        """, (draft_set_id,))
+        draft_questions = cursor.fetchall()
+
+        cursor.execute("""
+            INSERT INTO quiz (title, description, course_id, creator_id)
+            VALUES (%s, %s, %s, %s)
+        """, (
+            "AI Generated Quiz",
+            "Approved from AI draft set",
+            draft_set["course_id"],
+            creator_id
+        ))
+        real_quiz_id = cursor.lastrowid
+
+        for q in draft_questions:
+            cursor.execute("""
+                INSERT INTO question (quiz_id, question_text, question_type, points)
+                VALUES (%s, %s, %s, %s)
+            """, (
+                real_quiz_id,
+                q["question_text"],
+                q["question_type"],
+                q["points"]
+            ))
+            real_question_id = cursor.lastrowid
+
+            cursor.execute("""
+                SELECT answer_text, is_correct
+                FROM ai_draft_answer
+                WHERE draft_question_id = %s
+                ORDER BY draft_answer_id ASC
+            """, (q["draft_question_id"],))
+            draft_answers = cursor.fetchall()
+
+            for a in draft_answers:
+                cursor.execute("""
+                    INSERT INTO answer (question_id, is_correct, answer_text)
+                    VALUES (%s, %s, %s)
+                """, (
+                    real_question_id,
+                    a["is_correct"],
+                    a["answer_text"]
+                ))
+
+        cursor.execute("""
+            UPDATE ai_draft_set
+            SET status = 'approved'
+            WHERE draft_set_id = %s
+        """, (draft_set_id,))
+
+        conn.commit()
+
+        return {
+            "status": "ok",
+            "draft_set_id": draft_set_id,
+            "flashcard_set_id": real_set_id,
+            "quiz_id": real_quiz_id
+        }
+
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cursor.close()
+
+    
+def save_ai_draft_transaction(conn, user_id: int, course_id: int, raw_text: str, generated: dict):
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        conn.start_transaction()
+
+        cursor.execute("""
+            INSERT INTO ai_draft_set (user_id, course_id, source_type, source_text, status)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (
+            user_id,
+            course_id,
+            "notes",
+            raw_text,
+            "draft"
+        ))
+        draft_set_id = cursor.lastrowid
+
+        flashcards = generated["draft"]["flashcard_set"]["items"]
+        for card in flashcards:
+            cursor.execute("""
+                INSERT INTO ai_draft_flashcard (draft_set_id, front_text, back_text)
+                VALUES (%s, %s, %s)
+            """, (
+                draft_set_id,
+                card["front"],
+                card["back"]
+            ))
+
+        questions = generated["draft"]["quiz"]["questions"]
+        for q in questions:
+            cursor.execute("""
+                INSERT INTO ai_draft_question (draft_set_id, question_text, question_type, points)
+                VALUES (%s, %s, %s, %s)
+            """, (
+                draft_set_id,
+                q["question_text"],
+                q["question_type"],
+                q["points"]
+            ))
+            draft_question_id = cursor.lastrowid
+
+            for a in q["answers"]:
+                cursor.execute("""
+                    INSERT INTO ai_draft_answer (draft_question_id, answer_text, is_correct)
+                    VALUES (%s, %s, %s)
+                """, (
+                    draft_question_id,
+                    a["answer_text"],
+                    a["is_correct"]
+                ))
+
+        conn.commit()
+
+        return draft_set_id
+
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cursor.close()

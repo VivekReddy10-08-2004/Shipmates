@@ -156,3 +156,14 @@ What to show in the demo
 - Flashcards: create set -> appears instantly; edit/delete; mention pagination query params.
 - Quizzes: create -> list -> open -> submit; call out ACID create and batched answers query; mention pagination.
 
+## AI Generate Stub API
+
+### Endpoint
+`POST /generate/from-notes`
+
+### Request JSON
+```json
+{
+  "course_id": 1,
+  "raw_text": "Binary search works on sorted arrays."
+}

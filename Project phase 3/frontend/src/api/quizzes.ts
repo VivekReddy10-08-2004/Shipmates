@@ -8,7 +8,7 @@ export const createQuiz = async (data: any) => {
   return res.data;
 };
 
-export interface Quiz { // Again, change these interfaces as needed, since I don't know what the types are. -Rise
+export interface Quiz {
   id: Key | null | undefined;
   quiz_id: number;
   title: string;
@@ -34,9 +34,10 @@ export interface Score {
   max_score: number;
 }
 
-export const listQuizzes = async () => {
-  const res = await client.get(`${API_PREFIX}/quizzes`);
-  // Handle paginated response (backend returns {page, limit, items})
+export const listQuizzes = async (page = 1, limit = 20, creatorId?: number) => {
+  const params: Record<string, string> = { page: String(page), limit: String(limit) };
+  if (creatorId != null) params["creator_id"] = String(creatorId);
+  const res = await client.get(`${API_PREFIX}/quizzes`, { params });
   return res.data.items || res.data;
 };
 
@@ -47,5 +48,15 @@ export const getQuiz = async (quizId: any) => {
 
 export const submitQuiz = async (data: any) => {
   const res = await client.post(`${API_PREFIX}/submit`, data);
+  return res.data;
+};
+
+export const updateQuiz = async (quizId: number, payload: { title?: string; description?: string }) => {
+  const res = await client.put(`${API_PREFIX}/${quizId}`, payload);
+  return res.data;
+};
+
+export const deleteQuiz = async (quizId: number) => {
+  const res = await client.delete(`${API_PREFIX}/${quizId}`);
   return res.data;
 };

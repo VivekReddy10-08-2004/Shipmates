@@ -5,10 +5,10 @@ import mysql.connector
 def get_connection():
     """Establish and return a MySQL connection."""
     connection = mysql.connector.connect(
-        host="localhost",
+        host="LOCALHOST", 
         user="root",
-        password="password ",
-        database="dbName"
+        password="Tyvler22",
+        database="Shipmates"
     )
     return connection
 print("MySQL connector is working!")

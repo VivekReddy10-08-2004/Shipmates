@@ -164,7 +164,7 @@ export default function HomePage() {
           {/* description */}
           <p className="hero-subtitle">Study how you want.</p>
 
-          <p className="hero-body-text">Welcome to Shipmates! Shipmates makes it 
+          <p className="hero-body-text">Welcome to Shipmates! Shipmates makes it
             easier for students to study. We offer many features such as study groups,
             quizzes, flashcards, and more! If you are a student looking for academic
             resources, click resources below. If you are looking to get started on studying,
