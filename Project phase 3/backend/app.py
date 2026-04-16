@@ -19,6 +19,7 @@ from routes.direct_message_routes import router as dm_router
 from routes.quiz_routes import router as quiz_router
 from routes.flashcard_routes import router as flashcard_router
 from routes.resource_routes import router as resource_router
+from routes.generate_routes import router as generate_router
 
 from db import get_db_connection as get_db
 
@@ -119,7 +120,8 @@ def create_app():
     app.include_router(quiz_router, prefix="/quiz", tags=["Quizzes"])
     app.include_router(flashcard_router, prefix="/flashcards", tags=["Flashcards"])
     app.include_router(resource_router, prefix="/resources", tags=["Resources"])
-
+    app.include_router(generate_router)
+    
     return app
 
 if __name__ == "__main__":

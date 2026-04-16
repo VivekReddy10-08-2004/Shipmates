@@ -1,6 +1,8 @@
 # Jacob Craig
 
 from fastapi import APIRouter, HTTPException, status, Query, UploadFile, File, Request
+from pydantic import BaseModel
+from typing import Optional, List
 from mysql.connector import Error as MySQLError
 from db import get_db_connection
 import uuid
@@ -63,20 +65,24 @@ def get_match_profile(user_id: int = Query(...)):
             conn.close()
 
 
+class MatchProfilePayload(BaseModel):
+    user_id: int
+    study_style: Optional[str] = None
+    meeting_pref: Optional[str] = None
+    bio: Optional[str] = None
+    profile_image_url: Optional[str] = None
+    study_goal: Optional[str] = None
+    focus_time_pref: Optional[str] = None
+    noise_pref: Optional[str] = None
+    age: Optional[int] = None
+    preferred_min_age: Optional[int] = None
+    preferred_max_age: Optional[int] = None
+    course_ids: Optional[List[int]] = None
+
+
 @router.post("/profile", response_model=dict)
-def upsert_match_profile(
-    user_id: int = Query(...),
-    study_style: str = Query(None),
-    meeting_pref: str = Query(None),
-    bio: str = Query(None),
-    study_goal: str = Query(None),
-    focus_time_pref: str = Query(None),
-    noise_pref: str = Query(None),
-    age: int = Query(None),
-    preferred_min_age: int = Query(None),
-    preferred_max_age: int = Query(None),
-):
-    """Create/Update a user's StudyBuddy match profile."""
+def upsert_match_profile(payload: MatchProfilePayload):
+    """Create/Update a user's StudyBuddy match profile and selected courses."""
     conn = None
     cur = None
 
@@ -87,22 +93,34 @@ def upsert_match_profile(
         cur.execute(
             "CALL UpsertMatchProfile(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
             (
-                user_id,
-                study_style,
-                meeting_pref,
-                bio,
-                None,  # profile_image_url
-                study_goal,
-                focus_time_pref,
-                noise_pref,
-                age,
-                preferred_min_age,
-                preferred_max_age,
+                payload.user_id,
+                payload.study_style,
+                payload.meeting_pref,
+                payload.bio,
+                payload.profile_image_url,
+                payload.study_goal,
+                payload.focus_time_pref,
+                payload.noise_pref,
+                payload.age,
+                payload.preferred_min_age,
+                payload.preferred_max_age,
             ),
         )
 
         while cur.nextset():
             pass
+
+        # Replace the user's course selections
+        if payload.course_ids is not None:
+            cur.execute(
+                "DELETE FROM Match_Profile_Course WHERE user_id = %s",
+                (payload.user_id,),
+            )
+            if payload.course_ids:
+                cur.executemany(
+                    "INSERT INTO Match_Profile_Course (user_id, course_id) VALUES (%s, %s)",
+                    [(payload.user_id, cid) for cid in payload.course_ids],
+                )
 
         conn.commit()
 

@@ -1,64 +1,114 @@
-import type { Key } from "react";
-import client from "./axiosClient.js";
+import { API_BASE } from "./base.js";
 
-const API_PREFIX = "/flashcards";
-
-// create flashcard type to reference later - Rise
-// No idea if any of these types are right. Most of them came from quickfix, so change them later if needed.
 export type Flashcard = {
-  description: any;
-  title: string;
-  id: Key | null | undefined;
-  back: string;
-  front: string;
-  flashcard_id: number;
-  front_text: string;
-  back_text: string;
-  set_id: number;
+  flashcard_id?: number;
+  set_id?: number;
+  front?: string;
+  back?: string;
+  front_text?: string;
+  back_text?: string;
 };
 
 export type FlashcardSet = {
-  reloadSets(): unknown;
-  id: Key | null | undefined;
+  set_id: number;
   title: string;
-  description: string;
-  cards: Flashcard[];  
-};
-/**
- * Create a flashcard set
- * @param {{title: string, course_id?: number, flashcards: Array<{front:string,back:string}>}} data
- */
-export const createFlashcardSet = async (data: any) => {
-  const res = await client.post(`${API_PREFIX}/create`, data);
-  return res.data;
+  description?: string | null;
+  course_id?: number;
+  creator_id?: number;
+  created_at?: string;
+  cards?: Flashcard[];
+  // Allow the imperative handle method so refs work from FlashcardsPage
+  reloadSets?: () => void;
 };
 
-export const getFlashcardSet = async (setId: any) => {
-  const res = await client.get(`${API_PREFIX}/sets/${setId}`);
-  return res.data;
+type CreateFlashcardSetPayload = {
+  title: string;
+  description?: string;
+  course_id: number;
+  creator_id: number;
+  flashcards?: { front: string; back: string }[];
 };
 
-export const listFlashcardSets = async () => {
-  const res = await client.get(`${API_PREFIX}/sets`);
-  return res.data;
+type UpdateFlashcardSetPayload = {
+  title?: string;
+  description?: string;
 };
 
-export const updateFlashcardSet = async (setId: any, data: any) => {
-  const res = await client.put(`${API_PREFIX}/sets/${setId}`, data);
-  return res.data;
+type UpdateFlashcardPayload = {
+  front_text?: string;
+  back_text?: string;
 };
 
-export const deleteFlashcardSet = async (setId: any) => {
-  const res = await client.delete(`${API_PREFIX}/sets/${setId}`);
-  return res.data;
-};
+async function handleResponse(res: Response) {
+  let data: any = {};
+  try {
+    data = await res.json();
+  } catch {
+    data = {};
+  }
 
-export const updateFlashcard = async (cardId: any, data: any) => {
-  const res = await client.put(`${API_PREFIX}/cards/${cardId}`, data);
-  return res.data;
-};
+  if (!res.ok) {
+    throw new Error(data.detail || data.message || `HTTP ${res.status}`);
+  }
 
-export const deleteFlashcard = async (cardId: any) => {
-  const res = await client.delete(`${API_PREFIX}/cards/${cardId}`);
-  return res.data;
-};
+  return data;
+}
+
+async function safeFetch(url: string, options?: RequestInit) {
+  try {
+    const res = await fetch(url, options);
+    return await handleResponse(res);
+  } catch (err: any) {
+    if (err instanceof Error) {
+      throw err;
+    }
+    throw new Error("Network request failed");
+  }
+}
+
+export async function listFlashcardSets(page = 1, limit = 20, creatorId?: number) {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (creatorId != null) params.set("creator_id", String(creatorId));
+  return safeFetch(`${API_BASE}/flashcards/sets?${params.toString()}`);
+}
+
+export async function getFlashcardSet(setId: number) {
+  return safeFetch(`${API_BASE}/flashcards/${setId}`);
+}
+
+export async function createFlashcardSet(payload: CreateFlashcardSetPayload) {
+  // Send full payload as JSON body so the backend can receive cards too
+  return safeFetch(`${API_BASE}/flashcards/create`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateFlashcardSet(setId: number, payload: UpdateFlashcardSetPayload) {
+  return safeFetch(`${API_BASE}/flashcards/${setId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteFlashcardSet(setId: number) {
+  return safeFetch(`${API_BASE}/flashcards/${setId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function updateFlashcard(flashcardId: number, payload: UpdateFlashcardPayload) {
+  return safeFetch(`${API_BASE}/flashcards/card/${flashcardId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteFlashcard(flashcardId: number) {
+  return safeFetch(`${API_BASE}/flashcards/card/${flashcardId}`, {
+    method: "DELETE",
+  });
+}
