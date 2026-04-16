@@ -1,11 +1,14 @@
 import { NavLink } from "react-router-dom";
 
+import ShipmatesLogo from "../assets/shipmates_logo.png";
+
 export default function NavBar() {
   return (
     <header className="navbar">
       <div className="nav-left">
-        <span className="nav-logo-dot" />
-        <span className="nav-title">StudyBuddy Hub</span>
+        {/* <span className="nav-logo-dot" /> */}
+        <img className="nav-logo-img" src={ShipmatesLogo} alt="Shipmates logo"/>
+        <span className="nav-title">Shipmates</span>
       </div>
 
       <nav className="nav-right">
@@ -44,7 +47,7 @@ export default function NavBar() {
             "nav-link" + (isActive ? " nav-link-active" : "")
           }
         >
-          StudyBuddy Match
+          Shipmates Match
         </NavLink>
 
         <NavLink
