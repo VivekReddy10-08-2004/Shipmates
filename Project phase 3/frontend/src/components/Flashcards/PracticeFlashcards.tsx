@@ -7,11 +7,12 @@ import {
   updateFlashcard,
   deleteFlashcard,
   type Flashcard,
-  type FlashcardSet
+  type FlashcardSet,
 } from "../../api/flashcards.js";
 import useCurrentUser from "../../hooks/useCurrentUser.js";
+import { useReloadListener } from "../../utils/reloadEvents.js";
 
-const PracticeFlashcards = forwardRef((props, ref) => {
+const PracticeFlashcards = forwardRef((_props, ref) => {
   const { user } = useCurrentUser();
   const [sets, setSets] = useState<FlashcardSet[]>([]);
   const [selected, setSelected] = useState<FlashcardSet | null>(null);
@@ -19,6 +20,7 @@ const PracticeFlashcards = forwardRef((props, ref) => {
   const [flipped, setFlipped] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
   const [editingSetId, setEditingSetId] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
@@ -45,14 +47,40 @@ const PracticeFlashcards = forwardRef((props, ref) => {
       .finally(() => setLoading(false));
   };
 
-  useImperativeHandle(ref, () => ({
-    reloadSets
-  }));
+  useImperativeHandle(ref, () => ({ reloadSets }));
 
   useEffect(() => {
     reloadSets();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.user_id]);
+
+  useReloadListener("flashcards", reloadSets);
+
+  // Lock body scroll while any modal is open
+  useEffect(() => {
+    const anyOpen =
+      selected != null ||
+      editingSetId != null ||
+      showDeleteConfirm != null ||
+      deleteCardId != null;
+    if (anyOpen) {
+      document.body.classList.add("study-scroll-lock");
+    } else {
+      document.body.classList.remove("study-scroll-lock");
+    }
+    return () => document.body.classList.remove("study-scroll-lock");
+  }, [selected, editingSetId, showDeleteConfirm, deleteCardId]);
+
+  // Escape closes the practice modal
+  useEffect(() => {
+    if (!selected) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closePractice();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected]);
 
   const openSet = async (id: number) => {
     try {
@@ -64,6 +92,12 @@ const PracticeFlashcards = forwardRef((props, ref) => {
     } catch (err: unknown) {
       setError(typeof err === "string" ? err : "Failed to load set");
     }
+  };
+
+  const closePractice = () => {
+    setSelected(null);
+    setFlipped(false);
+    setIndex(0);
   };
 
   const handleEditClick = async (set: FlashcardSet) => {
@@ -82,7 +116,6 @@ const PracticeFlashcards = forwardRef((props, ref) => {
 
   const handleSaveEdit = async () => {
     if (editingSetId == null) return;
-
     try {
       setSaving(true);
       setError(null);
@@ -108,7 +141,6 @@ const PracticeFlashcards = forwardRef((props, ref) => {
 
   const handleSaveCard = async () => {
     if (editingCardId == null) return;
-
     try {
       setSaving(true);
       setError(null);
@@ -116,7 +148,6 @@ const PracticeFlashcards = forwardRef((props, ref) => {
         front_text: editCardFront,
         back_text: editCardBack,
       });
-
       setCardsData(
         cardsData.map((c) =>
           c.flashcard_id === editingCardId
@@ -124,7 +155,6 @@ const PracticeFlashcards = forwardRef((props, ref) => {
             : c
         )
       );
-
       setEditingCardId(null);
     } catch (err: unknown) {
       setError(typeof err === "string" ? err : "Failed to save card");
@@ -161,704 +191,339 @@ const PracticeFlashcards = forwardRef((props, ref) => {
     }
   };
 
-  if (!selected) {
-    return (
-      <div className="card" style={{ marginTop: "2rem" }}>
-        <h3>Practice Flashcards</h3>
-        {loading && <div style={{ color: "#9ca3af" }}>Loading sets...</div>}
-        {error && <div style={{ color: "#f97373", marginBottom: "1rem" }}>{error}</div>}
-        {!loading && sets.length === 0 && (
-          <div style={{ color: "#9ca3af" }}>No sets found. Create one to get started!</div>
-        )}
-
-        {editingSetId && (
-          <div
-            style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: "rgba(0,0,0,0.7)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 1000,
-            }}
-          >
-            <div
-              style={{
-                background: "rgba(15,23,42,0.95)",
-                border: "1px solid rgba(148,163,184,0.3)",
-                borderRadius: "0.75rem",
-                padding: "1.5rem",
-                maxWidth: "600px",
-                width: "95%",
-                maxHeight: "80vh",
-                overflowY: "auto",
-              }}
-            >
-              <h4 style={{ marginTop: 0, marginBottom: "1rem" }}>Edit Flashcard Set</h4>
-
-              <div
-                style={{
-                  display: "flex",
-                  gap: "0.5rem",
-                  marginBottom: "1.5rem",
-                  borderBottom: "1px solid rgba(148,163,184,0.3)",
-                }}
-              >
-                <button
-                  onClick={() => setEditMode("set")}
-                  style={{
-                    padding: "0.5rem 1rem",
-                    border: "none",
-                    background: editMode === "set" ? "rgba(14,165,233,0.2)" : "transparent",
-                    color: editMode === "set" ? "#0ea5e9" : "#9ca3af",
-                    cursor: "pointer",
-                    borderBottom: editMode === "set" ? "2px solid #0ea5e9" : "none",
-                  }}
-                >
-                  Set Details
-                </button>
-                <button
-                  onClick={() => setEditMode("cards")}
-                  style={{
-                    padding: "0.5rem 1rem",
-                    border: "none",
-                    background: editMode === "cards" ? "rgba(14,165,233,0.2)" : "transparent",
-                    color: editMode === "cards" ? "#0ea5e9" : "#9ca3af",
-                    cursor: "pointer",
-                    borderBottom: editMode === "cards" ? "2px solid #0ea5e9" : "none",
-                  }}
-                >
-                  Edit Cards ({cardsData.length})
-                </button>
-              </div>
-
-              {editMode === "set" && (
-                <>
-                  <div style={{ marginBottom: "1rem" }}>
-                    <label
-                      style={{
-                        display: "block",
-                        marginBottom: "0.5rem",
-                        fontSize: "0.9rem",
-                        color: "#cbd5e1",
-                      }}
-                    >
-                      Title
-                    </label>
-                    <input
-                      type="text"
-                      value={editTitle}
-                      onChange={(e) => setEditTitle(e.target.value)}
-                      style={{
-                        width: "100%",
-                        padding: "0.5rem",
-                        borderRadius: "0.5rem",
-                        border: "1px solid rgba(148,163,184,0.3)",
-                        background: "rgba(30,41,59,0.5)",
-                        color: "#e5e7eb",
-                        boxSizing: "border-box",
-                      }}
-                    />
-                  </div>
-
-                  <div style={{ marginBottom: "1.5rem" }}>
-                    <label
-                      style={{
-                        display: "block",
-                        marginBottom: "0.5rem",
-                        fontSize: "0.9rem",
-                        color: "#cbd5e1",
-                      }}
-                    >
-                      Description
-                    </label>
-                    <textarea
-                      value={editDescription}
-                      onChange={(e) => setEditDescription(e.target.value)}
-                      style={{
-                        width: "100%",
-                        padding: "0.5rem",
-                        borderRadius: "0.5rem",
-                        border: "1px solid rgba(148,163,184,0.3)",
-                        background: "rgba(30,41,59,0.5)",
-                        color: "#e5e7eb",
-                        boxSizing: "border-box",
-                        minHeight: "80px",
-                        fontFamily: "inherit",
-                      }}
-                    />
-                  </div>
-                </>
-              )}
-
-              {editMode === "cards" && (
-                <>
-                  {editingCardId ? (
-                    <>
-                      <h5 style={{ marginTop: 0, color: "#93c5fd" }}>Edit Card</h5>
-                      <div style={{ marginBottom: "1rem" }}>
-                        <label
-                          style={{
-                            display: "block",
-                            marginBottom: "0.5rem",
-                            fontSize: "0.9rem",
-                            color: "#cbd5e1",
-                          }}
-                        >
-                          Front (Question)
-                        </label>
-                        <textarea
-                          value={editCardFront}
-                          onChange={(e) => setEditCardFront(e.target.value)}
-                          style={{
-                            width: "100%",
-                            padding: "0.5rem",
-                            borderRadius: "0.5rem",
-                            border: "1px solid rgba(148,163,184,0.3)",
-                            background: "rgba(30,41,59,0.5)",
-                            color: "#e5e7eb",
-                            boxSizing: "border-box",
-                            minHeight: "60px",
-                            fontFamily: "inherit",
-                          }}
-                        />
-                      </div>
-
-                      <div style={{ marginBottom: "1.5rem" }}>
-                        <label
-                          style={{
-                            display: "block",
-                            marginBottom: "0.5rem",
-                            fontSize: "0.9rem",
-                            color: "#cbd5e1",
-                          }}
-                        >
-                          Back (Answer)
-                        </label>
-                        <textarea
-                          value={editCardBack}
-                          onChange={(e) => setEditCardBack(e.target.value)}
-                          style={{
-                            width: "100%",
-                            padding: "0.5rem",
-                            borderRadius: "0.5rem",
-                            border: "1px solid rgba(148,163,184,0.3)",
-                            background: "rgba(30,41,59,0.5)",
-                            color: "#e5e7eb",
-                            boxSizing: "border-box",
-                            minHeight: "60px",
-                            fontFamily: "inherit",
-                          }}
-                        />
-                      </div>
-
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: "0.75rem",
-                          justifyContent: "flex-end",
-                          marginBottom: "1.5rem",
-                        }}
-                      >
-                        <button
-                          onClick={() => setEditingCardId(null)}
-                          disabled={saving}
-                          style={{
-                            padding: "0.5rem 1rem",
-                            borderRadius: "0.5rem",
-                            border: "1px solid rgba(148,163,184,0.3)",
-                            background: "rgba(128,128,128,0.2)",
-                            color: "#e5e7eb",
-                            cursor: saving ? "default" : "pointer",
-                            opacity: saving ? 0.5 : 1,
-                          }}
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={handleSaveCard}
-                          disabled={saving}
-                          style={{
-                            padding: "0.5rem 1rem",
-                            borderRadius: "0.5rem",
-                            border: "1px solid rgba(34,197,94,0.5)",
-                            background: "rgba(34,197,94,0.2)",
-                            color: "#e5e7eb",
-                            cursor: saving ? "default" : "pointer",
-                            opacity: saving ? 0.5 : 1,
-                          }}
-                        >
-                          {saving ? "Saving..." : "Save Card"}
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <div style={{ maxHeight: "400px", overflowY: "auto" }}>
-                      {cardsData.length === 0 ? (
-                        <div style={{ color: "#9ca3af", textAlign: "center", padding: "2rem 0" }}>
-                          No cards yet
-                        </div>
-                      ) : (
-                        cardsData.map((card, idx) => (
-                          <div
-                            key={card.flashcard_id ?? idx}
-                            style={{
-                              padding: "1rem",
-                              marginBottom: "0.75rem",
-                              borderRadius: "0.5rem",
-                              border: "1px solid rgba(148,163,184,0.3)",
-                              background: "rgba(30,41,59,0.3)",
-                            }}
-                          >
-                            <div style={{ marginBottom: "0.5rem" }}>
-                              <div
-                                style={{
-                                  fontSize: "0.8rem",
-                                  color: "#9ca3af",
-                                  marginBottom: "0.25rem",
-                                }}
-                              >
-                                Front:
-                              </div>
-                              <div style={{ color: "#e5e7eb", fontSize: "0.9rem" }}>
-                                {card.front_text || card.front}
-                              </div>
-                            </div>
-
-                            <div style={{ marginBottom: "0.75rem" }}>
-                              <div
-                                style={{
-                                  fontSize: "0.8rem",
-                                  color: "#9ca3af",
-                                  marginBottom: "0.25rem",
-                                }}
-                              >
-                                Back:
-                              </div>
-                              <div style={{ color: "#e5e7eb", fontSize: "0.9rem" }}>
-                                {card.back_text || card.back}
-                              </div>
-                            </div>
-
-                            <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
-                              <button
-                                onClick={() => handleEditCard(card)}
-                                style={{
-                                  padding: "0.3rem 0.6rem",
-                                  borderRadius: "0.3rem",
-                                  border: "none",
-                                  background: "rgba(59,130,246,0.2)",
-                                  color: "#93c5fd",
-                                  cursor: "pointer",
-                                  fontSize: "0.75rem",
-                                }}
-                              >
-                                Edit
-                              </button>
-                              <button
-                                onClick={() => setDeleteCardId(card.flashcard_id ?? null)}
-                                style={{
-                                  padding: "0.3rem 0.6rem",
-                                  borderRadius: "0.3rem",
-                                  border: "none",
-                                  background: "rgba(239,68,68,0.2)",
-                                  color: "#fca5a5",
-                                  cursor: "pointer",
-                                  fontSize: "0.75rem",
-                                }}
-                              >
-                                Delete
-                              </button>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </>
-              )}
-
-              {deleteCardId && (
-                <div
-                  style={{
-                    position: "fixed",
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    background: "rgba(0,0,0,0.7)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    zIndex: 1001,
-                  }}
-                >
-                  <div
-                    style={{
-                      background: "rgba(15,23,42,0.95)",
-                      border: "1px solid rgba(239,68,68,0.5)",
-                      borderRadius: "0.75rem",
-                      padding: "1.5rem",
-                      maxWidth: "300px",
-                      width: "90%",
-                    }}
-                  >
-                    <h5 style={{ marginTop: 0, color: "#f87171" }}>Delete Card?</h5>
-                    <p
-                      style={{
-                        color: "#cbd5e1",
-                        fontSize: "0.9rem",
-                        marginBottom: "1.5rem",
-                      }}
-                    >
-                      This cannot be undone.
-                    </p>
-
-                    <div style={{ display: "flex", gap: "0.75rem", justifyContent: "flex-end" }}>
-                      <button
-                        onClick={() => setDeleteCardId(null)}
-                        disabled={saving}
-                        style={{
-                          padding: "0.4rem 0.8rem",
-                          borderRadius: "0.4rem",
-                          border: "1px solid rgba(148,163,184,0.3)",
-                          background: "rgba(128,128,128,0.2)",
-                          color: "#e5e7eb",
-                          cursor: saving ? "default" : "pointer",
-                          opacity: saving ? 0.5 : 1,
-                          fontSize: "0.8rem",
-                        }}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={() => handleDeleteCard(deleteCardId)}
-                        disabled={saving}
-                        style={{
-                          padding: "0.4rem 0.8rem",
-                          borderRadius: "0.4rem",
-                          border: "1px solid rgba(239,68,68,0.5)",
-                          background: "rgba(239,68,68,0.2)",
-                          color: "#e5e7eb",
-                          cursor: saving ? "default" : "pointer",
-                          opacity: saving ? 0.5 : 1,
-                          fontSize: "0.8rem",
-                        }}
-                      >
-                        {saving ? "Deleting..." : "Delete"}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div
-                style={{
-                  display: "flex",
-                  gap: "0.75rem",
-                  justifyContent: "flex-end",
-                  marginTop: "1.5rem",
-                  paddingTop: "1.5rem",
-                  borderTop: "1px solid rgba(148,163,184,0.3)",
-                }}
-              >
-                <button
-                  onClick={() => setEditingSetId(null)}
-                  disabled={saving}
-                  style={{
-                    padding: "0.5rem 1rem",
-                    borderRadius: "0.5rem",
-                    border: "1px solid rgba(148,163,184,0.3)",
-                    background: "rgba(128,128,128,0.2)",
-                    color: "#e5e7eb",
-                    cursor: saving ? "default" : "pointer",
-                    opacity: saving ? 0.5 : 1,
-                  }}
-                >
-                  Close
-                </button>
-                {editMode === "set" && (
-                  <button
-                    onClick={handleSaveEdit}
-                    disabled={saving}
-                    style={{
-                      padding: "0.5rem 1rem",
-                      borderRadius: "0.5rem",
-                      border: "1px solid rgba(34,197,94,0.5)",
-                      background: "rgba(34,197,94,0.2)",
-                      color: "#e5e7eb",
-                      cursor: saving ? "default" : "pointer",
-                      opacity: saving ? 0.5 : 1,
-                    }}
-                  >
-                    {saving ? "Saving..." : "Save Changes"}
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {showDeleteConfirm && (
-          <div
-            style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: "rgba(0,0,0,0.7)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 1000,
-            }}
-          >
-            <div
-              style={{
-                background: "rgba(15,23,42,0.95)",
-                border: "1px solid rgba(239,68,68,0.5)",
-                borderRadius: "0.75rem",
-                padding: "1.5rem",
-                maxWidth: "400px",
-                width: "90%",
-              }}
-            >
-              <h4 style={{ marginTop: 0, color: "#f87171" }}>Delete Flashcard Set?</h4>
-              <p style={{ color: "#cbd5e1", marginBottom: "1.5rem" }}>
-                This action cannot be undone. All flashcards in this set will be permanently deleted.
-              </p>
-              <div style={{ display: "flex", gap: "0.75rem", justifyContent: "flex-end" }}>
-                <button
-                  onClick={() => setShowDeleteConfirm(null)}
-                  disabled={saving}
-                  style={{
-                    padding: "0.5rem 1rem",
-                    borderRadius: "0.5rem",
-                    border: "1px solid rgba(148,163,184,0.3)",
-                    background: "rgba(128,128,128,0.2)",
-                    color: "#e5e7eb",
-                    cursor: saving ? "default" : "pointer",
-                    opacity: saving ? 0.5 : 1,
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => handleDeleteClick(showDeleteConfirm)}
-                  disabled={saving}
-                  style={{
-                    padding: "0.5rem 1rem",
-                    borderRadius: "0.5rem",
-                    border: "1px solid rgba(239,68,68,0.5)",
-                    background: "rgba(239,68,68,0.2)",
-                    color: "#e5e7eb",
-                    cursor: saving ? "default" : "pointer",
-                    opacity: saving ? 0.5 : 1,
-                  }}
-                >
-                  {saving ? "Deleting..." : "Delete"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div style={{ marginTop: "1rem" }}>
-          {sets.map((s: FlashcardSet) => (
-            <div
-              key={s.set_id}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.75rem",
-                padding: "0.75rem 1rem",
-                marginBottom: "0.5rem",
-                borderRadius: "0.75rem",
-                border: "1px solid rgba(148,163,184,0.3)",
-                background: "rgba(14,165,233,0.1)",
-                transition: "all 0.2s ease",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "rgba(14,165,233,0.2)";
-                e.currentTarget.style.borderColor = "rgba(14,165,233,0.5)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "rgba(14,165,233,0.1)";
-                e.currentTarget.style.borderColor = "rgba(148,163,184,0.3)";
-              }}
-            >
-              <button
-                onClick={() => openSet(s.set_id)}
-                style={{
-                  flex: 1,
-                  padding: 0,
-                  border: "none",
-                  background: "transparent",
-                  color: "#e5e7eb",
-                  cursor: "pointer",
-                  textAlign: "left",
-                  fontSize: "0.95rem",
-                }}
-              >
-                <strong>{s.title || `Set ${s.set_id}`}</strong>
-                {s.description && (
-                  <div
-                    style={{
-                      fontSize: "0.8rem",
-                      color: "#9ca3af",
-                      marginTop: "0.25rem",
-                    }}
-                  >
-                    {s.description}
-                  </div>
-                )}
-              </button>
-
-              <button
-                onClick={() => handleEditClick(s)}
-                style={{
-                  padding: "0.4rem 0.8rem",
-                  borderRadius: "0.4rem",
-                  border: "none",
-                  background: "rgba(59,130,246,0.2)",
-                  color: "#93c5fd",
-                  cursor: "pointer",
-                  fontSize: "0.8rem",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Edit
-              </button>
-
-              <button
-                onClick={() => setShowDeleteConfirm(s.set_id)}
-                style={{
-                  padding: "0.4rem 0.8rem",
-                  borderRadius: "0.4rem",
-                  border: "none",
-                  background: "rgba(239,68,68,0.2)",
-                  color: "#fca5a5",
-                  cursor: "pointer",
-                  fontSize: "0.8rem",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Delete
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  const cards = selected.cards || [];
+  const cards = selected?.cards || [];
   const card = cards[index];
   const total = cards.length;
 
   return (
-    <div className="card" style={{ marginTop: "2rem" }}>
-      <div style={{ marginBottom: "1.5rem" }}>
-        <h3 style={{ margin: 0, marginBottom: "0.5rem" }}>{selected.title}</h3>
-        <div style={{ fontSize: "0.85rem", color: "#9ca3af" }}>
-          Card {index + 1} of {total}
-        </div>
+    <>
+      {loading && <div className="study-empty">Loading sets…</div>}
+      {error && !selected && <div className="study-notice study-notice-error">{error}</div>}
+      {!loading && sets.length === 0 && (
+        <div className="study-empty">No sets in your logbook yet — forge one above!</div>
+      )}
+
+      <div>
+        {sets.map((s: FlashcardSet) => (
+          <div key={s.set_id} className="study-item-row">
+            <button className="study-item-main" onClick={() => openSet(s.set_id)}>
+              <div className="study-item-title">{s.title || `Set ${s.set_id}`}</div>
+              {s.description && <div className="study-item-desc">{s.description}</div>}
+            </button>
+            <button className="btn-ghost-gold" onClick={() => handleEditClick(s)}>
+              Edit
+            </button>
+            <button className="btn-danger-ghost" onClick={() => setShowDeleteConfirm(s.set_id)}>
+              Delete
+            </button>
+          </div>
+        ))}
       </div>
 
-      {card ? (
-        <div>
+      {/* Edit modal (parchment) */}
+      {editingSetId != null && (
+        <div className="study-modal-backdrop" onClick={() => !saving && setEditingSetId(null)}>
           <div
-            className={`flashcard-card ${flipped ? "flipped" : ""}`}
-            onClick={() => setFlipped((f) => !f)}
-            style={{ marginBottom: "1.5rem", margin: "0 auto 1.5rem auto" }}
+            className="study-modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: "620px" }}
           >
-            <div className="flashcard-front">{card.front_text || card.front || "No front"}</div>
-            <div className="flashcard-back">{card.back_text || card.back || "No back"}</div>
-          </div>
+            <h3>Edit Flashcard Set</h3>
 
-          <div
-            style={{
-              fontSize: "0.85rem",
-              color: "#9ca3af",
-              marginBottom: "1rem",
-              textAlign: "center",
-            }}
-          >
-            Click card to flip • {flipped ? "Showing Answer" : "Showing Question"}
-          </div>
+            <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.2rem", borderBottom: "1.5px solid rgba(90,58,26,0.3)" }}>
+              <button
+                onClick={() => setEditMode("set")}
+                style={{
+                  padding: "0.5rem 1rem",
+                  border: "none",
+                  background: editMode === "set" ? "rgba(61,38,16,0.15)" : "transparent",
+                  color: editMode === "set" ? "#2a1808" : "#6b4526",
+                  cursor: "pointer",
+                  fontWeight: 700,
+                  fontFamily: "var(--font-heading)",
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                  fontSize: "0.8rem",
+                  borderBottom: editMode === "set" ? "2px solid #8b2500" : "2px solid transparent",
+                }}
+              >
+                Set Details
+              </button>
+              <button
+                onClick={() => setEditMode("cards")}
+                style={{
+                  padding: "0.5rem 1rem",
+                  border: "none",
+                  background: editMode === "cards" ? "rgba(61,38,16,0.15)" : "transparent",
+                  color: editMode === "cards" ? "#2a1808" : "#6b4526",
+                  cursor: "pointer",
+                  fontWeight: 700,
+                  fontFamily: "var(--font-heading)",
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase",
+                  fontSize: "0.8rem",
+                  borderBottom: editMode === "cards" ? "2px solid #8b2500" : "2px solid transparent",
+                }}
+              >
+                Cards ({cardsData.length})
+              </button>
+            </div>
 
-          <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center", flexWrap: "wrap" }}>
-            <button
-              onClick={() => {
-                if (index > 0) {
-                  setIndex(index - 1);
-                  setFlipped(false);
-                }
-              }}
-              disabled={index === 0}
-              style={{
-                padding: "0.5rem 1rem",
-                borderRadius: "0.5rem",
-                border: "1px solid rgba(148,163,184,0.3)",
-                background: index === 0 ? "rgba(128,128,128,0.2)" : "rgba(14,165,233,0.15)",
-                color: index === 0 ? "#808080" : "#e5e7eb",
-                cursor: index === 0 ? "default" : "pointer",
-                fontSize: "0.9rem",
-              }}
-            >
-              Prev
-            </button>
+            {editMode === "set" && (
+              <>
+                <label>Title</label>
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                />
+                <label>Description</label>
+                <textarea
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                />
+              </>
+            )}
 
-            <button
-              onClick={() => {
-                if (index < total - 1) {
-                  setIndex(index + 1);
-                  setFlipped(false);
-                }
-              }}
-              disabled={index === total - 1}
-              style={{
-                padding: "0.5rem 1rem",
-                borderRadius: "0.5rem",
-                border: "1px solid rgba(148,163,184,0.3)",
-                background:
-                  index === total - 1 ? "rgba(128,128,128,0.2)" : "rgba(14,165,233,0.15)",
-                color: index === total - 1 ? "#808080" : "#e5e7eb",
-                cursor: index === total - 1 ? "default" : "pointer",
-                fontSize: "0.9rem",
-              }}
-            >
-              Next
-            </button>
+            {editMode === "cards" && (
+              <>
+                {editingCardId ? (
+                  <>
+                    <label>Front (Question)</label>
+                    <textarea
+                      value={editCardFront}
+                      onChange={(e) => setEditCardFront(e.target.value)}
+                    />
+                    <label>Back (Answer)</label>
+                    <textarea
+                      value={editCardBack}
+                      onChange={(e) => setEditCardBack(e.target.value)}
+                    />
+                    <div className="study-modal-actions">
+                      <button
+                        className="btn-ghost-gold"
+                        onClick={() => setEditingCardId(null)}
+                        disabled={saving}
+                        style={{ color: "#3d2610", borderColor: "rgba(90,58,26,0.4)" }}
+                      >
+                        Cancel
+                      </button>
+                      <button className="btn-wood" onClick={handleSaveCard} disabled={saving}>
+                        {saving ? "Saving…" : "Save Card"}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ maxHeight: "420px", overflowY: "auto" }}>
+                    {cardsData.length === 0 ? (
+                      <div style={{ textAlign: "center", padding: "2rem 0", color: "#6b4526", fontStyle: "italic" }}>
+                        No cards yet.
+                      </div>
+                    ) : (
+                      cardsData.map((c, idx) => (
+                        <div
+                          key={c.flashcard_id ?? idx}
+                          style={{
+                            padding: "0.85rem 1rem",
+                            marginBottom: "0.6rem",
+                            borderRadius: "0.45rem",
+                            border: "1.5px solid rgba(90,58,26,0.35)",
+                            background: "rgba(255,250,230,0.6)",
+                          }}
+                        >
+                          <div style={{ fontSize: "0.75rem", color: "#6b4526", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "0.15rem" }}>
+                            Front
+                          </div>
+                          <div style={{ color: "#2a1808", fontSize: "0.95rem", marginBottom: "0.5rem" }}>
+                            {c.front_text || c.front}
+                          </div>
+                          <div style={{ fontSize: "0.75rem", color: "#6b4526", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "0.15rem" }}>
+                            Back
+                          </div>
+                          <div style={{ color: "#2a1808", fontSize: "0.95rem", marginBottom: "0.6rem" }}>
+                            {c.back_text || c.back}
+                          </div>
+                          <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+                            <button
+                              className="btn-ghost-gold"
+                              onClick={() => handleEditCard(c)}
+                              style={{ color: "#3d2610", borderColor: "rgba(90,58,26,0.4)", fontSize: "0.72rem", padding: "0.3rem 0.7rem" }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="btn-danger-ghost"
+                              onClick={() => setDeleteCardId(c.flashcard_id ?? null)}
+                              style={{ fontSize: "0.72rem", padding: "0.3rem 0.7rem" }}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </>
+            )}
 
-            <button
-              onClick={() => {
-                setSelected(null);
-                setFlipped(false);
-              }}
-              style={{
-                padding: "0.5rem 1rem",
-                borderRadius: "0.5rem",
-                border: "1px solid rgba(148,163,184,0.3)",
-                background: "rgba(239,68,68,0.15)",
-                color: "#e5e7eb",
-                cursor: "pointer",
-                fontSize: "0.9rem",
-              }}
-            >
-              Close
-            </button>
+            {deleteCardId != null && (
+              <div className="study-modal-backdrop" onClick={() => !saving && setDeleteCardId(null)} style={{ zIndex: 1200 }}>
+                <div className="study-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "340px" }}>
+                  <h4>Delete card?</h4>
+                  <p className="study-modal-warn">This cannot be undone.</p>
+                  <div className="study-modal-actions">
+                    <button
+                      className="btn-ghost-gold"
+                      onClick={() => setDeleteCardId(null)}
+                      disabled={saving}
+                      style={{ color: "#3d2610", borderColor: "rgba(90,58,26,0.4)" }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      className="btn-wood"
+                      onClick={() => handleDeleteCard(deleteCardId)}
+                      disabled={saving}
+                      style={{ background: "linear-gradient(180deg, #7a2418, #4a1008)" }}
+                    >
+                      {saving ? "Deleting…" : "Delete"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="study-modal-actions">
+              <button
+                className="btn-ghost-gold"
+                onClick={() => setEditingSetId(null)}
+                disabled={saving}
+                style={{ color: "#3d2610", borderColor: "rgba(90,58,26,0.4)" }}
+              >
+                Close
+              </button>
+              {editMode === "set" && (
+                <button className="btn-wood" onClick={handleSaveEdit} disabled={saving}>
+                  {saving ? "Saving…" : "Save Changes"}
+                </button>
+              )}
+            </div>
           </div>
         </div>
-      ) : (
-        <div style={{ color: "#9ca3af" }}>No cards in this set.</div>
       )}
-    </div>
+
+      {/* Delete set confirm modal */}
+      {showDeleteConfirm != null && (
+        <div className="study-modal-backdrop" onClick={() => !saving && setShowDeleteConfirm(null)}>
+          <div className="study-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "400px" }}>
+            <h4>Send this set to the depths?</h4>
+            <p className="study-modal-warn">
+              This cannot be undone. All cards in this set will be lost.
+            </p>
+            <div className="study-modal-actions">
+              <button
+                className="btn-ghost-gold"
+                onClick={() => setShowDeleteConfirm(null)}
+                disabled={saving}
+                style={{ color: "#3d2610", borderColor: "rgba(90,58,26,0.4)" }}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-wood"
+                onClick={() => handleDeleteClick(showDeleteConfirm)}
+                disabled={saving}
+                style={{ background: "linear-gradient(180deg, #7a2418, #4a1008)" }}
+              >
+                {saving ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FULL MODAL — practice */}
+      {selected && (
+        <div className="study-fullmodal-backdrop" onClick={closePractice}>
+          <div className="study-fullmodal" onClick={(e) => e.stopPropagation()}>
+            <button
+              className="study-fullmodal-close"
+              onClick={closePractice}
+              aria-label="Close"
+            >
+              ×
+            </button>
+
+            <div style={{ marginBottom: "1.3rem", paddingBottom: "0.9rem", borderBottom: "1px solid rgba(212,168,67,0.3)", paddingRight: "2.5rem" }}>
+              <div style={{ fontFamily: "var(--font-heading)", fontSize: "1.35rem", color: "var(--parchment)", letterSpacing: "0.04em" }}>
+                {selected.title}
+              </div>
+              <div style={{ fontSize: "0.78rem", color: "var(--gold)", letterSpacing: "0.1em", textTransform: "uppercase", marginTop: "0.5rem" }}>
+                Card {index + 1} of {total}
+              </div>
+            </div>
+
+            {card ? (
+              <div>
+                <div
+                  className={`flashcard-card ${flipped ? "flipped" : ""}`}
+                  onClick={() => setFlipped((f) => !f)}
+                  style={{ margin: "0 auto 1.2rem auto" }}
+                >
+                  <div className="flashcard-front">{card.front_text || card.front || "No front"}</div>
+                  <div className="flashcard-back">{card.back_text || card.back || "No back"}</div>
+                </div>
+
+                <div
+                  style={{
+                    fontSize: "0.78rem",
+                    color: "var(--text-muted)",
+                    marginBottom: "1rem",
+                    textAlign: "center",
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Click card to flip • {flipped ? "Showing Answer" : "Showing Question"}
+                </div>
+
+                <div style={{ display: "flex", gap: "0.7rem", justifyContent: "center", flexWrap: "wrap" }}>
+                  <button
+                    className="btn-ghost-gold"
+                    onClick={() => {
+                      if (index > 0) {
+                        setIndex(index - 1);
+                        setFlipped(false);
+                      }
+                    }}
+                    disabled={index === 0}
+                    style={{ opacity: index === 0 ? 0.45 : 1 }}
+                  >
+                    ← Prev
+                  </button>
+
+                  <button
+                    className="btn-treasure"
+                    onClick={() => {
+                      if (index < total - 1) {
+                        setIndex(index + 1);
+                        setFlipped(false);
+                      }
+                    }}
+                    disabled={index === total - 1}
+                  >
+                    Next →
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="study-empty">No cards in this set.</div>
+            )}
+          </div>
+        </div>
+      )}
+    </>
   );
 });
 

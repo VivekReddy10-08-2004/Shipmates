@@ -29,9 +29,22 @@ export interface Answer {
   answer_text: string;
 }
 
+export interface QuestionResult {
+  question_id: number;
+  question_text: string;
+  points: number;
+  is_correct: boolean;
+  selected_answer_id: number | null;
+  selected_answer_text: string | null;
+  correct_answer_id: number | null;
+  correct_answer_text: string | null;
+}
+
 export interface Score {
   score: number;
   max_score: number;
+  attempt_id?: number;
+  results?: QuestionResult[];
 }
 
 export const listQuizzes = async (page = 1, limit = 20, creatorId?: number) => {

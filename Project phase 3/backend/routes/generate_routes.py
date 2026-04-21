@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from services.ai_generate import generate_study_drafts
+from services.ai_generate import generate_study_drafts, AIGenerateError
 from db import get_db_connection
 from utils.transactions import approve_ai_draft_transaction
 from utils.transactions import save_ai_draft_transaction
@@ -12,10 +12,12 @@ class GenerateFromNotesRequest(BaseModel):
     user_id: int
     course_id: int
     raw_text: str
+    kind: str = "both"   # "quiz" | "flashcards" | "both"
 
 class ApproveDraftRequest(BaseModel):
     draft_set_id: int
     creator_id: int
+    kind: str = "both"   # "quiz" | "flashcards" | "both"
 
 
 @router.post("/from-notes")
@@ -24,7 +26,8 @@ def generate_from_notes(payload: GenerateFromNotesRequest):
         generated = generate_study_drafts(
             course_id=payload.course_id,
             raw_text=payload.raw_text,
-            user_id=payload.user_id
+            user_id=payload.user_id,
+            kind=payload.kind,
         )
 
         conn = get_db_connection()
@@ -44,8 +47,11 @@ def generate_from_notes(payload: GenerateFromNotesRequest):
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    
-    
+    except AIGenerateError as e:
+        # 502 = upstream dependency failed (OpenAI unreachable / misconfigured)
+        raise HTTPException(status_code=502, detail=f"AI generation failed: {e}")
+
+
 @router.post("/approve")
 def approve_generated_draft(payload: ApproveDraftRequest):
     conn = get_db_connection()
@@ -53,7 +59,8 @@ def approve_generated_draft(payload: ApproveDraftRequest):
         return approve_ai_draft_transaction(
             conn=conn,
             draft_set_id=payload.draft_set_id,
-            creator_id=payload.creator_id
+            creator_id=payload.creator_id,
+            kind=payload.kind,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

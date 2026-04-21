@@ -32,6 +32,10 @@ export interface Conversation {
   isYouRequester: boolean;
   isRequestFlow: boolean;
   last_message?: string;
+  // Backend sometimes flattens the partner's name onto the conversation;
+  // keep these optional so the UI can fall back to them.
+  first_name?: string;
+  last_name?: string;
 }
 
 export interface Message {

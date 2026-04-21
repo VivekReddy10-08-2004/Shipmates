@@ -1,13 +1,30 @@
 # Jacob Craig
 
 import os
-from fastapi import APIRouter, HTTPException, status, Query, UploadFile, File
+from typing import Optional
+from fastapi import APIRouter, HTTPException, status, Query, UploadFile, File, Form
+from pydantic import BaseModel
 from db import get_db_connection
 
 router = APIRouter()
 
+
+class CreateResourceRequest(BaseModel):
+    title: str
+    url: str
+    filetype: str
+    description: Optional[str] = None
+    uploader_id: Optional[int] = None
+
 # Basic whitelist for uploads
-ALLOWED_RESOURCE_EXTENSIONS = {"pdf", "mp4", "mov", "mkv"}
+ALLOWED_RESOURCE_EXTENSIONS = {
+    "pdf",
+    "mp4", "mov", "mkv", "webm", "avi",
+    "png", "jpg", "jpeg", "gif",
+    "txt", "md", "csv",
+    "doc", "docx", "ppt", "pptx", "xls", "xlsx",
+    "zip",
+}
 
 
 def _allowed_resource_file(filename: str) -> bool:
@@ -54,14 +71,12 @@ def list_resources(limit: int = Query(None)):
 
 # ============= CREATE RESOURCE =============
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=dict)
-def create_resource(
-    title: str = Query(...),
-    description: str = Query(None),
-    url: str = Query(...),
-    filetype: str = Query(...),
-    uploader_id: int = Query(...),
-):
+def create_resource(payload: CreateResourceRequest):
     """Create a new resource that points at a URL."""
+    title = (payload.title or "").strip()
+    url = (payload.url or "").strip()
+    filetype = (payload.filetype or "").strip()
+
     if not title or not url or not filetype:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -77,7 +92,13 @@ def create_resource(
             INSERT INTO Resource (uploader_id, title, description, filetype, source, upload_date)
             VALUES (%s, %s, %s, %s, %s, NOW())
             """,
-            (uploader_id, title, description or None, filetype.upper(), url),
+            (
+                payload.uploader_id,
+                title,
+                payload.description or None,
+                filetype.upper(),
+                url,
+            ),
         )
         resource_id = cur.lastrowid
 
@@ -194,10 +215,10 @@ def delete_resource(resource_id: int, uploader_id: int = Query(...)):
 
 @router.post("/upload-file", status_code=status.HTTP_201_CREATED, response_model=dict)
 async def upload_resource_file(
-    uploader_id: int = Query(...),
-    title: str = Query(...),
-    description: str = Query(None),
-    filetype: str = Query(...),
+    title: str = Form(...),
+    filetype: str = Form(...),
+    description: Optional[str] = Form(None),
+    uploader_id: Optional[int] = Form(None),
     file: UploadFile = File(...),
 ):
     """Upload a file and create a resource record pointing to it."""

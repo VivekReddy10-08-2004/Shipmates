@@ -23,10 +23,10 @@ import {
   type StudyRequest,
   type Member,
   type Invite,
-  type ChatGroup,
 } from "../api/studygroups.js";
+import { formatDateOnly, formatTimeString, formatDateTime } from "../utils/dateFormat.js";
+import { openCrewChat } from "../utils/shipsLogApi.js";
 
-import ChatPage from "./ChatPage.js";
 import CheckJoinIcon from "../assets/CheckJoin.png";
 import { API_BASE } from "../api/base.js";
 import { type Course, type User } from "../hooks/useCurrentUser.js";
@@ -36,7 +36,6 @@ export default function StudyGroups() {
   const [authLoading, setAuthLoading] = useState(true);
 
   // chat state 
-  const [chatGroup, setChatGroup] = useState<ChatGroup | null>(null);
 
   // filters / data 
   const [courseId, setCourseId] = useState(null);
@@ -611,18 +610,6 @@ export default function StudyGroups() {
     </div>
   );
 
-  // Chat mode
-  if (chatGroup !== null) {
-    return (
-      <ChatPage
-        groupId={chatGroup.id}
-        groupName={chatGroup.name}
-        userId={currentUser?.user_id}
-        onBack={() => setChatGroup(null)}
-      />
-    );
-  }
-
   // Build a quick lookup of groups the current user is already in
   const myGroupIds = new Set(myGroups.map((g) => g.group_id));
 
@@ -671,8 +658,15 @@ export default function StudyGroups() {
 
   // Render
   return (
-    <div className="app-shell">
-      <h1 className="page-title">Study Groups</h1>
+    <div className="crews-page">
+      {/* Atmospheric background layer (nautical chart grid) */}
+      <div className="crews-bg-layer" aria-hidden="true" />
+
+      {/* Hero — wooden dock sign */}
+      <div className="crews-hero">
+        <div className="crews-hero-ropes" aria-hidden="true" />
+        <h1 className="crews-hero-title">Study Crews</h1>
+      </div>
 
       {/* Top layout: My Groups + right side panel */}
       <div
@@ -684,119 +678,113 @@ export default function StudyGroups() {
           marginBottom: "2rem",
         }}
       >
-        {/* My groups */}
+        {/* My crews */}
         <section className="section" style={{ marginBottom: 0 }}>
-          <div className="card">
-            <div className="card-header">
-              <div className="card-title">My Groups</div>
+          <div className="crews-panel">
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: "0.75rem",
+              }}
+            >
+              <h2 className="crews-panel-title">My Crews</h2>
               <button
                 type="button"
-                className="btn btn-ghost btn-sm-2"
+                className="crew-plaque-btn ghost"
                 onClick={openCalendar}
               >
                 View upcoming sessions
               </button>
             </div>
             {myGroups.length === 0 ? (
-              <p>You are not in any study groups yet.</p>
-            ) : (
-              <div className="scroll-list">
-                <ul className="clean-list">
-                  {myGroups.map((g) => (
-                    <li key={g.group_id} className="group-row">
-                      <div className="group-main">
-                        <span className="group-name">{g.group_name}</span>
-                        <span className="group-meta">role: {g.role}</span>
-                      </div>
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: "0.5rem",
-                          alignItems: "center",
-                        }}
-                      >
-                        <button
-                          type="button"
-                          className="btn btn-ghost icon-btn"
-                          title={
-                            g.role === "owner"
-                              ? "View join requests & members"
-                              : "View group members"
-                          }
-                          onClick={() =>
-                            openManageModal({
-                              id: g.group_id,
-                              name: g.group_name,
-                              role: g.role,
-                            })
-                          }
-                        >
-                          <img src={CheckJoinIcon} alt="Manage members" />
-                        </button>
-
-                        <button
-                          className="btn btn-primary"
-                          type="button"
-                          onClick={() =>
-                            setChatGroup({
-                              id: g.group_id,
-                              name: g.group_name,
-                            })
-                          }
-                        >
-                          Chat
-                        </button>
-
-                        <button
-                          className="btn btn-ghost"
-                          type="button"
-                          onClick={() => {
-                            setScheduleGroup({
-                              id: g.group_id,
-                              name: g.group_name,
-                            });
-                            setShowScheduleModal(true);
-                          }}
-                        >
-                          Schedule
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+              <div className="crews-empty">
+                You're not in any crews yet. Start one or find one on the right.
               </div>
+            ) : (
+              myGroups.map((g) => (
+                <div key={g.group_id} className="crew-plaque">
+                  <div className="crew-plaque-main">
+                    <span className="crew-plaque-name">{g.group_name}</span>
+                    <span className="crew-plaque-role">role: {g.role}</span>
+                  </div>
+                  <div className="crew-plaque-actions">
+                    <button
+                      type="button"
+                      className="crew-plaque-btn ghost"
+                      title={
+                        g.role === "owner"
+                          ? "View join requests & members"
+                          : "View group members"
+                      }
+                      onClick={() =>
+                        openManageModal({
+                          id: g.group_id,
+                          name: g.group_name,
+                          role: g.role,
+                        })
+                      }
+                    >
+                      Manage
+                    </button>
+
+                    <button
+                      className="crew-plaque-btn primary"
+                      type="button"
+                      onClick={() => openCrewChat(g.group_id)}
+                    >
+                      Chat
+                    </button>
+
+                    <button
+                      className="crew-plaque-btn ghost"
+                      type="button"
+                      onClick={() => {
+                        setScheduleGroup({
+                          id: g.group_id,
+                          name: g.group_name,
+                        });
+                        setShowScheduleModal(true);
+                      }}
+                    >
+                      Schedule
+                    </button>
+                  </div>
+                </div>
+              ))
             )}
           </div>
         </section>
 
         {/* Right side: Create/Search tabs */}
         <section className="section" style={{ marginBottom: 0 }}>
-          <div className="card">
-            <div className="tabs" style={{ marginBottom: "1rem" }}>
+          <div className="crews-panel">
+            <div className="crews-tabs">
               <button
                 type="button"
                 className={
-                  "tab-btn" + (activeTab === "create" ? " tab-btn-active" : "")
+                  "crews-tab-btn" + (activeTab === "create" ? " active" : "")
                 }
                 onClick={() => setActiveTab("create")}
               >
-                Create group
+                Start a Crew
               </button>
               <button
                 type="button"
                 className={
-                  "tab-btn" + (activeTab === "search" ? " tab-btn-active" : "")
+                  "crews-tab-btn" + (activeTab === "search" ? " active" : "")
                 }
                 onClick={() => setActiveTab("search")}
               >
-                Search groups
+                Find a Crew
               </button>
             </div>
 
             {activeTab === "create" && (
               <div>
                 <div className="card-title" style={{ fontSize: "1.05rem" }}>
-                  Create a Group
+                  Start a Crew
                 </div>
                 <form
                   onSubmit={handleCreateGroup}
@@ -833,24 +821,18 @@ export default function StudyGroups() {
                         min={1}
                       />
                     </label>
-                    <label
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "0.35rem",
-                      }}
-                    >
+                    <label className="crews-private-row" style={{ textTransform: "none", color: "var(--text-main)", fontWeight: 500, letterSpacing: 0 }}>
                       <input
                         type="checkbox"
                         checked={newIsPrivate}
                         onChange={(e) => setNewIsPrivate(e.target.checked)}
                       />
-                      Private group
+                      Private crew
                     </label>
                   </div>
                   <div>
-                    <button type="submit" className="btn btn-primary">
-                      Create group
+                    <button type="submit" className="crew-plaque-btn primary" style={{ padding: "0.55rem 1.25rem" }}>
+                      Start a Crew
                     </button>
                   </div>
                 </form>
@@ -859,45 +841,51 @@ export default function StudyGroups() {
 
             {activeTab === "search" && (
               <div>
-                <div className="card-title" style={{ fontSize: "1.05rem" }}>
-                  Search public groups by course
-                </div>
+                <h3
+                  style={{
+                    fontFamily: "var(--font-heading)",
+                    fontSize: "1.05rem",
+                    fontWeight: 700,
+                    color: "var(--gold)",
+                    margin: "0 0 0.25rem",
+                    letterSpacing: "0.03em",
+                  }}
+                >
+                  Find a Crew by course
+                </h3>
                 <p
                   style={{
-                    margin: "0.25rem 0 0.75rem",
-                    fontSize: "0.9rem",
-                    opacity: 0.75,
+                    margin: "0.25rem 0 0.9rem",
+                    fontSize: "0.88rem",
+                    color: "var(--text-muted)",
                   }}
                 >
                   Start typing a course code (e.g., COS 420) or course name to
-                  discover groups.
+                  discover crews.
                 </p>
 
                 <div
-                  className="toolbar-row"
                   style={{
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "flex-start",
                     gap: "1rem",
                     flexWrap: "wrap",
-                    marginBottom: "0.75rem",
+                    marginBottom: "0.9rem",
                   }}
                 >
-                  {/* smart course picker + refresh */}
                   <div style={{ flex: "1 1 260px" }}>
                     {coursePicker}
                     <button
-                      className="btn btn-primary"
+                      className="crew-plaque-btn primary"
                       onClick={loadData}
                       type="button"
-                      style={{ marginTop: "0.5rem" }}
+                      style={{ marginTop: "0.55rem", padding: "0.5rem 1rem" }}
                     >
-                      Refresh groups for this course
+                      Refresh crews for this course
                     </button>
                   </div>
 
-                  {/* join-by-code */}
                   <form
                     onSubmit={handleJoinByCode}
                     style={{
@@ -907,8 +895,13 @@ export default function StudyGroups() {
                       flexWrap: "wrap",
                     }}
                   >
-                    <span style={{ fontSize: "0.85rem", opacity: 0.8 }}>
-                      Or join a private group by code:
+                    <span
+                      style={{
+                        fontSize: "0.82rem",
+                        color: "var(--text-muted)",
+                      }}
+                    >
+                      Or join a private crew by code:
                     </span>
                     <input
                       type="text"
@@ -919,7 +912,7 @@ export default function StudyGroups() {
                     />
                     <button
                       type="submit"
-                      className="btn btn-ghost btn-alt-dark"
+                      className="crew-plaque-btn ghost"
                       disabled={inviteJoinLoading}
                     >
                       {inviteJoinLoading ? "Joining..." : "Join with code"}
@@ -927,34 +920,36 @@ export default function StudyGroups() {
                   </form>
                 </div>
 
-                {loading && <p>Loading groups...</p>}
+                {loading && (
+                  <p style={{ color: "var(--text-muted)" }}>
+                    Loading crews...
+                  </p>
+                )}
                 {error && <p className="error-text">{error}</p>}
 
                 {visiblePublicGroups.length === 0 ? (
-                  <p>No public groups found.</p>
+                  <div className="crews-empty">No public crews found.</div>
                 ) : (
-                  <div className="scroll-list">
-                    <ul className="clean-list">
-                      {visiblePublicGroups.map((g) => (
-                        <li key={g.group_id} className="group-row">
-                          <div className="group-main">
-                            <span className="group-name">{g.group_name}</span>
-                            <span className="group-meta">
-                              {g.members}/{g.max_members} members
-                              {g.last_session &&
-                                ` · last session: ${g.last_session}`}
-                            </span>
-                          </div>
-                          <button
-                            className="btn btn-ghost"
-                            type="button"
-                            onClick={() => handleJoin(g.group_id)}
-                          >
-                            Join
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
+                  <div>
+                    {visiblePublicGroups.map((g) => (
+                      <div key={g.group_id} className="crew-search-row">
+                        <div>
+                          <span className="crew-search-name">
+                            {g.group_name}
+                          </span>
+                          <span className="crew-search-meta">
+                            {g.members}/{g.max_members} members
+                          </span>
+                        </div>
+                        <button
+                          className="crew-plaque-btn primary"
+                          type="button"
+                          onClick={() => handleJoin(g.group_id)}
+                        >
+                          Join
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -1413,14 +1408,16 @@ export default function StudyGroups() {
                     {selectedCalendarDate && selectedEvents.length > 0 ? (
                       <>
                         <div className="calendar-events-header">
-                          Sessions on {selectedCalendarDate}
+                          Sessions on {formatDateOnly(selectedCalendarDate)}
                         </div>
                         <ul className="clean-list">
                           {selectedEvents.map((s, i) => {
-                            const start = s.start_time?.slice(0, 5);
-                            const end = s.end_time?.slice(0, 5);
+                            const startFmt = formatTimeString(s.start_time);
+                            const endFmt = formatTimeString(s.end_time);
                             const timeLabel =
-                              start && end ? `${start}–${end}` : start || "";
+                              startFmt && endFmt
+                                ? `${startFmt} – ${endFmt}`
+                                : startFmt || "";
 
                             return (
                               <li key={i} className="calendar-event-row">
@@ -1471,6 +1468,7 @@ export default function StudyGroups() {
           {toastMessage}
         </div>
       )}
+
     </div>
   );
 }
