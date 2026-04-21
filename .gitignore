@@ -7,3 +7,6 @@ node_modules/
 # User-uploaded files (profile pictures, resource uploads) — do not commit
 Project phase 3/backend/uploads/
 
+# Vite build output
+Project phase 3/frontend/dist/
+
