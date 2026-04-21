@@ -185,14 +185,16 @@ export default function GlobalShipsLog() {
       setTab(detail.kind === "crew" ? "crew" : "dm");
 
       // Use setTimeout so state updates for refreshAll flush first.
+      const uid = userId;
+      if (uid == null) return;
       setTimeout(async () => {
         if (detail.kind === "crew") {
-          const g = (await fetchMyGroups(userId)).find(
+          const g = (await fetchMyGroups(uid)).find(
             (x: Group) => x.group_id === detail.id,
           );
           if (g) openCrew(g);
         } else {
-          const ib = await fetchInbox(userId);
+          const ib = await fetchInbox(uid);
           const c = (ib || []).find(
             (x: Conversation) => x.conversation_id === detail.id,
           );
