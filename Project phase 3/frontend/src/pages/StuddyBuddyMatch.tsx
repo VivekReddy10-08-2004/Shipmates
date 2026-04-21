@@ -1,6 +1,6 @@
 // Jacob Craig
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   saveMatchProfile,
   fetchMatchSuggestions,
@@ -20,6 +20,10 @@ import { searchCourses } from "../api/studygroups.js";
 import { API_BASE } from "../api/base.js";
 import { type Course, type College, type User } from "../hooks/useCurrentUser.js";
 import { type Conversation } from "../api/match.js";
+import DockTutorial, { type TourStep } from "../components/DockTutorial.js";
+import { formatDateTime } from "../utils/dateFormat.js";
+
+const DOCK_TOUR_KEY = "sb_dock_tour_done";
 
 export default function StudyBuddyMatch() {
   // 🔐 Logged-in user
@@ -66,6 +70,21 @@ export default function StudyBuddyMatch() {
   const [isLoadingInbox, setIsLoadingInbox] = useState(false);
 
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null); // profile popup
+
+  // Guided tour state
+  const [tourActive, setTourActive] = useState(false);
+  const [tourSteps, setTourSteps] = useState<TourStep[]>([]);
+
+  // Auto-scroll chat to bottom when messages change or conversation opens
+  const chatMessagesRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = chatMessagesRef.current;
+    if (!el) return;
+    // Scroll on next frame so the new message has been laid out
+    requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+    });
+  }, [dmMessages, activeConversation?.conversation_id]);
 
   // ---------------------------
   // 1) Load logged-in user
@@ -235,10 +254,7 @@ export default function StudyBuddyMatch() {
   }
 
   function formatTime(raw) {
-    if (!raw) return "";
-    const d = new Date(raw);
-    if (Number.isNaN(d.getTime())) return raw;
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return formatDateTime(raw);
   }
 
   // ---------------------------
@@ -576,6 +592,64 @@ export default function StudyBuddyMatch() {
     console.log("DISABLE DM INPUT?", disableDmInput);
   }, [disableDmInput]);
 
+  // Auto-launch tour for first-time users (no profile + haven't done the tour).
+  // Must live BEFORE any early return so React sees the same hook count every render.
+  useEffect(() => {
+    if (!initialized) return;
+    if (hasProfile) return;
+    let done = false;
+    try {
+      done = window.localStorage.getItem(DOCK_TOUR_KEY) === "1";
+    } catch {
+      /* ignore */
+    }
+    if (!done) {
+      const t = setTimeout(() => {
+        setShowProfileForm(true);
+        setTourSteps([
+          {
+            title: "Welcome Ashore, Matey!",
+            body:
+              "The Dock is where you find your study partner. Let me show you how it works in 4 quick steps.",
+            icon: "⚓",
+          },
+          {
+            target: '[data-tour="manifest-title"]',
+            placement: "bottom",
+            icon: "📜",
+            title: "1. Fill out your profile",
+            body:
+              "Tell other students how you study, when you're free, and what courses you're in. This helps us match you.",
+          },
+          {
+            target: '[data-tour="manifest-courses"]',
+            placement: "bottom",
+            icon: "📚",
+            title: "2. Add your courses",
+            body:
+              "Pick up to 5 courses. We only match you with people who share at least one class — that's the magic.",
+          },
+          {
+            target: '[data-tour="manifest-save"]',
+            placement: "bottom",
+            icon: "💾",
+            title: "3. Save your profile",
+            body:
+              "When you're ready, hit Save Profile. We'll find compatible classmates and show them below.",
+          },
+          {
+            title: "4. Send a Crew Request",
+            body:
+              "Once matches appear, click \"Send Crew Request\" on anyone interesting. If they accept, you can chat and plan study sessions together!",
+            icon: "💬",
+          },
+        ]);
+        setTourActive(true);
+      }, 500);
+      return () => clearTimeout(t);
+    }
+  }, [initialized, hasProfile]);
+
   // While we’re figuring out who the user is, show a soft loading state
   if (authLoading) {
     return (
@@ -586,79 +660,242 @@ export default function StudyBuddyMatch() {
   }
 
   // ---------------------------
+  // Derived state for match buttons
+  // ---------------------------
+  // Map of other_user_id -> conversation info (if we already have one)
+  const conversationByUser = new Map<number, any>();
+  for (const c of inbox) {
+    const otherId = c?.partner?.other_user_id ?? c?.other_user_id;
+    if (otherId != null) conversationByUser.set(otherId, c);
+  }
+  // Set of user_ids who have sent ME a pending request
+  const incomingRequestByUser = new Map<number, any>();
+  for (const r of requests as any[]) {
+    const rid = r?.requester_user_id;
+    if (rid != null) incomingRequestByUser.set(rid, r);
+  }
+
+  type MatchStatus = "none" | "sent" | "accepted" | "incoming";
+
+  function statusForMatch(m: any): MatchStatus {
+    const convo = conversationByUser.get(m.other_user_id);
+    if (convo) {
+      const status = convo.request_status || "accepted";
+      if (status === "accepted") return "accepted";
+      if (status === "pending") return "sent";
+    }
+    if (incomingRequestByUser.has(m.other_user_id)) return "incoming";
+    return "none";
+  }
+
+  async function handleSendCrewRequest(match: any) {
+    const userId = currentUser?.user_id;
+    if (!userId) return;
+    setError("");
+    setInfo("");
+    try {
+      await startConversation(userId, match.other_user_id);
+      setInfo(`Crew request sent to ${match.first_name}!`);
+      await loadInbox();
+    } catch (err) {
+      console.error(err);
+      if (err instanceof Error)
+        setError(err.message || "Failed to send request.");
+    }
+  }
+
+  async function handleOpenChatWithMatch(match: any) {
+    const userId = currentUser?.user_id;
+    if (!userId) return;
+    const convo = conversationByUser.get(match.other_user_id);
+    if (!convo) {
+      // fallback — shouldn't happen if status === accepted
+      await handleSendCrewRequest(match);
+      return;
+    }
+    setShowChatDock(true);
+    await openConversationFromInbox(convo);
+  }
+
+  async function handleAcceptIncomingRequest(match: any) {
+    const req = incomingRequestByUser.get(match.other_user_id);
+    if (!req) return;
+    await handleRespondToRequest(req, "accept");
+  }
+
+  function initialsFromName(first?: string, last?: string) {
+    const f = (first || "").trim().charAt(0).toUpperCase();
+    const l = (last || "").trim().charAt(0).toUpperCase();
+    return (f + l) || "?";
+  }
+
+  /** Start the first-time guided tour for users without a profile. */
+  function startNewUserTour() {
+    setShowProfileForm(true); // ensure the form is visible during the tour
+    setTourSteps([
+      {
+        title: "Welcome Ashore, Matey!",
+        body:
+          "The Dock is where you find your study partner. Let me show you how it works in 4 quick steps.",
+        icon: "⚓",
+      },
+      {
+        target: '[data-tour="manifest-title"]',
+        placement: "bottom",
+        icon: "📜",
+        title: "1. Fill out your profile",
+        body:
+          "Tell other students how you study, when you're free, and what courses you're in. This helps us match you.",
+      },
+      {
+        target: '[data-tour="manifest-courses"]',
+        placement: "left",
+        icon: "📚",
+        title: "2. Add your courses",
+        body:
+          "Pick up to 5 courses. We only match you with people who share at least one class — that's the magic.",
+      },
+      {
+        target: '[data-tour="manifest-save"]',
+        placement: "top",
+        icon: "💾",
+        title: "3. Save your profile",
+        body:
+          "When you're ready, hit Save Profile. We'll find compatible classmates and show them below.",
+      },
+      {
+        title: "4. Send a Crew Request",
+        body:
+          "Once matches appear, click \"Send Crew Request\" on anyone interesting. If they accept, you can chat and plan study sessions together!",
+        icon: "💬",
+      },
+    ]);
+    setTourActive(true);
+  }
+
+  function closeTour() {
+    setTourActive(false);
+    try {
+      window.localStorage.setItem(DOCK_TOUR_KEY, "1");
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // ---------------------------
   // Render
   // ---------------------------
   return (
-    <div className="app-shell home-page">
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: "1rem",
-          marginBottom: "0.5rem",
-        }}
-      >
-        <h1 className="page-title">StudyBuddy Match</h1>
-
-        {hasProfile && (
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={() => setShowProfileForm((v) => !v)}
-          >
-            {showProfileForm ? "Hide profile settings" : "Profile settings"}
-          </button>
-        )}
+    <div className="dock-page home-page">
+      {/* Hero — wooden dock sign hanging from ropes */}
+      <div className="dock-hero">
+        <div className="dock-hero-ropes" aria-hidden="true" />
+        <div>
+          <h1 className="dock-hero-title">The Dock</h1>
+        </div>
+        <div className="dock-hero-actions">
+          {hasProfile && (
+            <>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setShowProfileForm((v) => !v)}
+              >
+                {showProfileForm ? "Hide Settings" : "Dock Settings"}
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={handleRefreshMatches}
+                disabled={isLoadingMatches}
+              >
+                {isLoadingMatches ? "Searching..." : "Refresh mateys"}
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
-      {/* Profile card */}
+      {/* Small "re-run tour" prompt for users without a profile (after they dismiss the auto tour) */}
+      {!hasProfile && initialized && !tourActive && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "1rem",
+            padding: "0.85rem 1.2rem",
+            marginBottom: "1rem",
+            border: "1px solid rgba(212, 168, 67, 0.3)",
+            borderRadius: "0.65rem",
+            background: "rgba(26, 138, 125, 0.08)",
+          }}
+        >
+          <div>
+            <strong style={{ color: "var(--gold)" }}>New to The Dock?</strong>
+            <p style={{ margin: "0.15rem 0 0", color: "var(--text-muted)", fontSize: "0.88rem" }}>
+              Take the quick tour — we'll walk you through setting up your profile.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={startNewUserTour}
+            style={{ flexShrink: 0 }}
+          >
+            ⚓ Start Tour
+          </button>
+        </div>
+      )}
+
+      {/* Guided tour overlay */}
+      <DockTutorial
+        active={tourActive}
+        steps={tourSteps}
+        onClose={closeTour}
+      />
+
+      {/* ============== PROFILE MANIFEST ============== */}
       {showProfileForm && (
         <section className="section">
-          <div className="card feature-card"> {/* had to get rid of feature-card-gamified, since it kept causing the entire form to become transparent upon hover - Rise */}
-            <div className="feature-card-header">
-              <div className="feature-card-title-row">
-                <h2 className="feature-grid-title">Your Match Profile</h2>
-              </div>
-            </div>
-
-            <p className="hero-standard">
-              Tell StudyBuddy how you like to learn, when you&apos;re free, and
-              which courses you&apos;re focused on. We&apos;ll suggest compatible
-              study partners from your college first, then beyond.
+          <div className="manifest-card">
+            <h2 className="manifest-title" data-tour="manifest-title">Captain's Manifest</h2>
+            <p className="manifest-sub">
+              Tell your fellow mateys how you like to study, when you're free,
+              and which courses you're taking. We'll suggest compatible
+              shipmates from your college first.
             </p>
 
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "minmax(0, 1.4fr) minmax(0, 1fr)",
+                gridTemplateColumns: "minmax(0, 1.1fr) minmax(0, 1fr)",
                 gap: "1.5rem",
-                marginTop: "1.25rem",
               }}
             >
-              {/* Left: profile form */}
+              {/* Left column */}
               <div>
-                <div className="section" style={{ marginBottom: "1rem" }}>
-                  <label>Study style</label>
+                <div className="manifest-field">
+                  <label className="manifest-label">Study Style</label>
                   <select
                     name="study_style"
                     value={profile.study_style}
                     onChange={handleChange}
-                    className="auth-input"
+                    className="manifest-select"
                   >
-                    <option value="solo">Solo</option>
-                    <option value="pair">Pair</option>
-                    <option value="group">Group</option>
+                    <option value="solo">Solo — I work alone</option>
+                    <option value="pair">Pair — I like a study buddy</option>
+                    <option value="group">Group — bring the whole crew</option>
                   </select>
                 </div>
 
-                <div className="section" style={{ marginBottom: "1rem" }}>
-                  <label>Meeting preference</label>
+                <div className="manifest-field">
+                  <label className="manifest-label">Meeting Preference</label>
                   <select
                     name="meeting_pref"
                     value={profile.meeting_pref}
                     onChange={handleChange}
-                    className="auth-input"
+                    className="manifest-select"
                   >
                     <option value="online">Online</option>
                     <option value="in_person">In-person</option>
@@ -666,13 +903,13 @@ export default function StudyBuddyMatch() {
                   </select>
                 </div>
 
-                <div className="section" style={{ marginBottom: "1rem" }}>
-                  <label>Study goal</label>
+                <div className="manifest-field">
+                  <label className="manifest-label">Study Goal</label>
                   <select
                     name="study_goal"
                     value={profile.study_goal}
                     onChange={handleChange}
-                    className="auth-input"
+                    className="manifest-select"
                   >
                     <option value="make friends">Make friends</option>
                     <option value="ace tests">Ace tests</option>
@@ -681,252 +918,233 @@ export default function StudyBuddyMatch() {
                   </select>
                 </div>
 
-                <div
-                  className="section"
-                  style={{
-                    marginBottom: "1rem",
-                    display: "grid",
-                    gap: "0.75rem",
-                  }}
-                >
-                  <div>
-                    <label>Focus time</label>
-                    <select
-                      name="focus_time_pref"
-                      value={profile.focus_time_pref}
-                      onChange={handleChange}
-                      className="auth-input"
-                    >
-                      <option value="morning">Morning</option>
-                      <option value="afternoon">Afternoon</option>
-                      <option value="evening">Evening</option>
-                      <option value="night">Late night</option>
-                      <option value="no preference">No preference</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label>Noise level preference</label>
-                    <select
-                      name="noise_pref"
-                      value={profile.noise_pref}
-                      onChange={handleChange}
-                      className="auth-input"
-                    >
-                      <option value="silent">Silent</option>
-                      <option value="some noise">Some chatter</option>
-                      <option value="background music">
-                        Background music OK
-                      </option>
-                      <option value="no preference">No preference</option>
-                    </select>
-                  </div>
+                <div className="manifest-field">
+                  <label className="manifest-label">Focus Time</label>
+                  <select
+                    name="focus_time_pref"
+                    value={profile.focus_time_pref}
+                    onChange={handleChange}
+                    className="manifest-select"
+                  >
+                    <option value="morning">Morning</option>
+                    <option value="afternoon">Afternoon</option>
+                    <option value="evening">Evening</option>
+                    <option value="night">Late night</option>
+                    <option value="no preference">No preference</option>
+                  </select>
                 </div>
 
-                <div
-                  className="section"
-                  style={{
-                    marginBottom: "1rem",
-                    display: "grid",
-                    gap: "0.75rem",
-                  }}
-                >
-                  <div>
-                    <label>Your age (optional)</label>
-                    <input
-                      type="number"
-                      name="age"
-                      min="17"
-                      max="80"
-                      value={profile.age}
-                      onChange={handleChange}
-                      placeholder="e.g. 20"
-                    />
-                  </div>
+                <div className="manifest-field">
+                  <label className="manifest-label">Noise Preference</label>
+                  <select
+                    name="noise_pref"
+                    value={profile.noise_pref}
+                    onChange={handleChange}
+                    className="manifest-select"
+                  >
+                    <option value="silent">Silent</option>
+                    <option value="some noise">Some chatter</option>
+                    <option value="background music">Background music OK</option>
+                    <option value="no preference">No preference</option>
+                  </select>
+                </div>
 
-                  <div>
-                    <label>Profile image</label>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.75rem",
-                        marginTop: "0.25rem",
-                      }}
-                    >
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleFileInput}
+                <div className="manifest-field">
+                  <label className="manifest-label">Your Age (optional)</label>
+                  <input
+                    type="number"
+                    name="age"
+                    min="17"
+                    max="80"
+                    value={profile.age}
+                    onChange={handleChange}
+                    placeholder="e.g. 20"
+                    className="manifest-input"
+                  />
+                </div>
+
+                <div className="manifest-field">
+                  <label className="manifest-label">Portrait</label>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.9rem",
+                      marginTop: "0.3rem",
+                    }}
+                  >
+                    {profile.profile_image_url ? (
+                      <img
+                        src={profile.profile_image_url}
+                        alt="Portrait"
+                        style={{
+                          width: "64px",
+                          height: "64px",
+                          borderRadius: "50%",
+                          objectFit: "cover",
+                          border: "3px solid #d4a843",
+                        }}
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                        }}
                       />
-                      {isUploading && (
-                        <span className="group-meta">Uploading...</span>
-                      )}
-                    </div>
-                    {profile.profile_image_url && (
-                      <div style={{ marginTop: "0.5rem" }}>
-                        <img
-                          src={profile.profile_image_url}
-                          alt="Profile preview"
-                          style={{
-                            width: "64px",
-                            height: "64px",
-                            borderRadius: "999px",
-                            objectFit: "cover",
-                            border: "1px solid rgba(148,163,184,0.75)",
-                          }}
-                          onError={(e) => {
-                            e.currentTarget.style.display = "none";
-                          }}
-                        />
+                    ) : (
+                      <div
+                        className="crewmate-avatar crewmate-avatar-placeholder"
+                        style={{ width: 64, height: 64 }}
+                      >
+                        ?
                       </div>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileInput}
+                      style={{ color: "#2a1808" }}
+                    />
+                    {isUploading && (
+                      <span className="manifest-course-name">Uploading...</span>
                     )}
                   </div>
                 </div>
 
-                <div className="section" style={{ marginBottom: "1rem" }}>
-                  <label>Short bio</label>
+                <div className="manifest-field">
+                  <label className="manifest-label">Your Story (Bio)</label>
                   <textarea
                     name="bio"
                     value={profile.bio}
                     onChange={handleChange}
-                    placeholder="Tell potential study buddies a little about yourself..."
+                    placeholder="A few words about yourself, what you're studying for, what you hope to find..."
+                    className="manifest-textarea"
                   />
                 </div>
               </div>
 
-              {/* Right: course selection + actions */}
+              {/* Right column — courses */}
               <div>
-                <div className="section" style={{ marginBottom: "1.1rem" }}>
-                  <div className="card-header">
-                    <div>
-                      <div className="card-title">Courses to match on</div>
-                      <p className="group-meta">
-                        You can choose up to 5 courses. We only match students
-                        who share at least one.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div
-                    className="section"
-                    style={{ marginBottom: "0.5rem" }}
-                  >
-                    <input
-                      type="text"
-                      placeholder="Search courses (e.g., COS 420 or Database Systems)"
-                      value={courseQuery}
-                      onChange={(e) => handleCourseSearch(e.target.value)}
-                    />
-                  </div>
-
-                  {courseResults.length > 0 && (
-                    <div
-                      className="scroll-list card-subtle"
-                      style={{
-                        padding: "0.5rem 0.75rem",
-                        borderRadius: "0.75rem",
-                        marginBottom: "0.75rem",
-                      }}
-                    >
-                      <ul className="clean-list">
-                        {courseResults.map((c) => (
-                          <li key={c.course_id} className="group-row">
-                            <div className="group-main">
-                              <span className="group-name">
-                                {c.course_code}
-                              </span>
-                              <span className="group-meta">
-                                {c.course_name}
-                                {c.college_name ? ` · ${c.college_name}` : ""}
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-primary"
-                              onClick={() => handleAddCourse(c)}
-                            >
-                              Add
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  <div
-                    className="card-subtle"
-                    style={{
-                      padding: "0.75rem 0.9rem",
-                      borderRadius: "0.9rem",
-                    }}
-                  >
-                    <div
-                      className="card-header"
-                      style={{ marginBottom: "0.4rem" }}
-                    >
-                      <div
-                        className="card-title"
-                        style={{ fontSize: "1rem" }}
-                      >
-                        Selected ({selectedCourses.length}/5)
-                      </div>
-                    </div>
-
-                    {selectedCourses.length === 0 ? (
-                      <p className="group-meta">No courses selected yet.</p>
-                    ) : (
-                      <ul className="clean-list scroll-list">
-                        {selectedCourses.map((c) => (
-                          <li key={c.course_id} className="group-row">
-                            <div className="group-main">
-                              <span className="group-name">
-                                {c.course_code}
-                              </span>
-                              <span className="group-meta">
-                                {c.course_name}
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-ghost"
-                              onClick={() => handleRemoveCourse(c.course_id)}
-                            >
-                              Remove
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
+                <div className="manifest-field">
+                  <label className="manifest-label" data-tour="manifest-courses">Your Courses</label>
+                  <p className="manifest-course-name" style={{ marginBottom: "0.5rem" }}>
+                    Pick up to 5. We only match mateys who share at least one course with you.
+                  </p>
+                  <input
+                    type="text"
+                    placeholder="Search courses (e.g., COS 420)"
+                    value={courseQuery}
+                    onChange={(e) => handleCourseSearch(e.target.value)}
+                    className="manifest-input"
+                  />
                 </div>
 
-                <div
-                  className="section"
-                  style={{
-                    marginTop: "0.75rem",
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: "0.75rem",
-                  }}
-                >
+                {courseResults.length > 0 && (
+                  <div className="manifest-courses">
+                    {courseResults.map((c) => (
+                      <div key={c.course_id} className="manifest-course-row">
+                        <div>
+                          <span className="manifest-course-code">
+                            {c.course_code}
+                          </span>
+                          <span className="manifest-course-name">
+                            {c.course_name}
+                            {c.college_name ? ` · ${c.college_name}` : ""}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          className="manifest-save"
+                          style={{ padding: "0.3rem 0.8rem", fontSize: "0.75rem" }}
+                          onClick={() => handleAddCourse(c)}
+                        >
+                          Add
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="manifest-courses" style={{ marginTop: "0.75rem" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: "0.4rem",
+                    }}
+                  >
+                    <strong style={{ color: "#2a1808" }}>
+                      Selected ({selectedCourses.length}/5)
+                    </strong>
+                  </div>
+
+                  {selectedCourses.length === 0 ? (
+                    <p className="manifest-course-name">
+                      No courses selected yet. Search above to add some.
+                    </p>
+                  ) : (
+                    selectedCourses.map((c) => (
+                      <div key={c.course_id} className="manifest-course-row">
+                        <div>
+                          <span className="manifest-course-code">
+                            {c.course_code}
+                          </span>
+                          <span className="manifest-course-name">
+                            {c.course_name}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          style={{
+                            padding: "0.3rem 0.8rem",
+                            fontSize: "0.75rem",
+                            fontWeight: 700,
+                            color: "#2a1808",
+                            background: "rgba(139, 37, 0, 0.12)",
+                            border: "1.5px solid rgba(139, 37, 0, 0.45)",
+                            borderRadius: "0.4rem",
+                            cursor: "pointer",
+                          }}
+                          onClick={() => handleRemoveCourse(c.course_id)}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div style={{ marginTop: "1.25rem" }}>
                   <button
                     type="button"
-                    className="btn btn-primary"
+                    className="manifest-save"
+                    data-tour="manifest-save"
                     onClick={handleSaveProfile}
                     disabled={isSaving}
                   >
-                    {isSaving ? "Saving profile..." : "Save profile"}
+                    {isSaving ? "Saving..." : "Save Profile"}
                   </button>
                 </div>
 
                 {error && (
-                  <p className="error-text" style={{ marginTop: "0.5rem" }}>
+                  <p
+                    style={{
+                      color: "#8b2500",
+                      marginTop: "0.6rem",
+                      fontWeight: 700,
+                      fontSize: "0.88rem",
+                    }}
+                  >
                     {error}
                   </p>
                 )}
                 {info && !error && (
-                  <p className="group-meta" style={{ marginTop: "0.5rem" }}>
+                  <p
+                    style={{
+                      color: "#0e6b60",
+                      marginTop: "0.6rem",
+                      fontWeight: 600,
+                      fontSize: "0.88rem",
+                    }}
+                  >
                     {info}
                   </p>
                 )}
@@ -936,533 +1154,245 @@ export default function StudyBuddyMatch() {
         </section>
       )}
 
-      {/* hide until profile is saved */}
-      {hasProfile && (
+      {/* ============== SUGGESTED CREWMATES ============== */}
+      {hasProfile && !showProfileForm && (
         <section className="section">
-          <div className="card card-subtle">
-            <div className="card-header">
-              <div>
-                <div className="card-title">Suggested StudyBuddies</div>
-                <p className="group-meta">
-                  Here is who we think would be a great fit for you!
-                </p>
-              </div>
+          <h2 className="dock-section-title">Suggested Mateys</h2>
+          <p className="dock-section-sub">
+            Compatible shipmates from your college. Tap a portrait to learn more.
+          </p>
 
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={handleRefreshMatches}
-                disabled={isLoadingMatches}
-              >
-                {isLoadingMatches ? "Refreshing..." : "Refresh matches"}
-              </button>
-            </div>
-
-            {matches.length === 0 ? (
-              <p className="group-meta">
-                {initialized ? "No matches yet." : "Loading..."}
+          {matches.length === 0 ? (
+            <div className="dock-empty">
+              <p style={{ margin: 0, fontSize: "1rem", marginBottom: "0.5rem" }}>
+                🧭 No mateys in sight yet.
               </p>
-            ) : (
-              <div className="scroll-list">
-                <ul className="clean-list">
-                  {matches.map((m) => {
-                    const isThisOpen =
-                      activeConversation?.partner?.other_user_id ===
-                      m.other_user_id;
-
-                    return (
-                      <li key={m.other_user_id} className="group-row">
-                        <div className="group-main">
-                          <button
-                            type="button"
-                            className="group-name"
-                            style={{
-                              background: "none",
-                              border: "none",
-                              padding: 0,
-                              margin: 0,
-                              textAlign: "left",
-                              cursor: "pointer",
-                            }}
-                            onClick={() => setSelectedMatch(m)}
-                          >
-                            {m.first_name} {m.last_name}
-                          </button>
+              <p style={{ margin: 0, fontSize: "0.85rem" }}>
+                {initialized
+                  ? "Try refreshing, or add more courses to your manifest to broaden your voyage."
+                  : "Loading..."}
+              </p>
+            </div>
+          ) : (
+            <div className="crewmate-grid">
+              {matches.map((m) => {
+                const status = statusForMatch(m);
+                return (
+                  <div key={m.other_user_id} className="crewmate-card">
+                    <div className="crewmate-card-top">
+                      {m.profile_image_url ? (
+                        <img
+                          src={m.profile_image_url}
+                          alt={`${m.first_name} ${m.last_name}`}
+                          className="crewmate-avatar"
+                          onError={(e) => {
+                            e.currentTarget.style.display = "none";
+                          }}
+                        />
+                      ) : (
+                        <div className="crewmate-avatar crewmate-avatar-placeholder">
+                          {initialsFromName(m.first_name, m.last_name)}
                         </div>
+                      )}
 
-                        <div
+                      <div className="crewmate-info">
+                        <button
+                          type="button"
+                          className="crewmate-name"
+                          onClick={() => setSelectedMatch(m)}
                           style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            alignItems: "flex-end",
-                            gap: "0.4rem",
+                            background: "transparent",
+                            border: "none",
+                            padding: 0,
+                            cursor: "pointer",
                           }}
                         >
-                          {m.profile_image_url ? (
-                            <img
-                              src={m.profile_image_url}
-                              alt={`${m.first_name} ${m.last_name}`}
-                              style={{
-                                width: "44px",
-                                height: "44px",
-                                borderRadius: "999px",
-                                objectFit: "cover",
-                                border: "1px solid rgba(148,163,184,0.6)",
-                              }}
-                              onError={(e) => {
-                                e.currentTarget.style.display = "none";
-                              }}
-                            />
-                          ) : null}
+                          {m.first_name} {m.last_name}
+                        </button>
+                      </div>
+                    </div>
 
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-primary"
-                            onClick={() => openChatWithMatch(m)}
-                            disabled={isLoadingChat && isThisOpen}
-                          >
-                            {isLoadingChat && isThisOpen
-                              ? "Opening..."
-                              : isThisOpen
-                              ? "Open chat"
-                              : "Message"}
-                          </button>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            )}
-          </div>
+                    <div className="crewmate-actions">
+                      {status === "none" && (
+                        <button
+                          type="button"
+                          className="crewmate-btn crewmate-btn-primary"
+                          onClick={() => handleSendCrewRequest(m)}
+                        >
+                          Send Friend Request
+                        </button>
+                      )}
+                      {status === "sent" && (
+                        <button
+                          type="button"
+                          className="crewmate-btn crewmate-btn-ghost"
+                          disabled
+                        >
+                          Request Sent
+                        </button>
+                      )}
+                      {status === "incoming" && (
+                        <button
+                          type="button"
+                          className="crewmate-btn crewmate-btn-primary"
+                          onClick={() => handleAcceptIncomingRequest(m)}
+                        >
+                          Accept Request
+                        </button>
+                      )}
+                      {status === "accepted" && (
+                        <button
+                          type="button"
+                          className="crewmate-btn crewmate-btn-primary"
+                          onClick={() => handleOpenChatWithMatch(m)}
+                        >
+                          Open Chat
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="crewmate-btn crewmate-btn-ghost"
+                        onClick={() => setSelectedMatch(m)}
+                        style={{ flex: "0 0 auto" }}
+                      >
+                        View
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </section>
       )}
 
-      {hasProfile && (
-        <>
-          {/* Floating Chat button in the bottom-right */}
-          <button
-            type="button"
-            className="btn btn-primary"
-            style={{
-              position: "fixed",
-              right: "1.5rem",
-              bottom: showChatDock ? "19rem" : "1.5rem",
-              zIndex: 40,
-              borderRadius: "999px",
-              paddingInline: "1.25rem",
-            }}
-            onClick={() => setShowChatDock((v) => !v)}
-          >
-            Chat
-          </button>
+      {/* Ship's Log chat is now mounted globally via GlobalShipsLog */}
 
-          {showChatDock && (
-            <div
-              className="card card-subtle"
-              style={{
-                position: "fixed",
-                right: "1.5rem",
-                bottom: "1.5rem",
-                width: "640px",
-                maxHeight: "580px",
-                display: "flex",
-                flexDirection: "column",
-                zIndex: 50,
-              }}
-            >
-              {/* Top bar of the dock */}
-              <div
-                className="card-header"
-                style={{ justifyContent: "space-between", alignItems: "center" }}
-              >
-                <div className="card-title" style={{ fontSize: "0.95rem" }}>
-                  Chat
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={() => setShowChatDock(false)}
-                >
-                  Close
-                </button>
-              </div>
-
-              {/* Two columns: left = list, right = active conversation */}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "minmax(0, 1.3fr) minmax(0, 1.7fr)",
-                  gap: "0.5rem",
-                  padding: "0.75rem",
-                  flex: 1,
-                  minHeight: 0,
-                }}
-              >
-                {/* LEFT: messages + requests list */}
-                <div
-                  className="scroll-list"
-                  style={{
-                    borderRight: "1px solid rgba(148,163,184,0.35)",
-                    paddingRight: "0.5rem",
-                  }}
-                >
-                  {/* Conversations */}
-                  <div className="group-meta" style={{ fontSize: "0.8rem" }}>
-                    Messages
-                  </div>
-                  {isLoadingInbox ? (
-                    <p className="group-meta">Loading…</p>
-                  ) : inbox.length === 0 ? (
-                    <p className="group-meta">No conversations yet.</p>
-                  ) : (
-                    <ul className="clean-list">
-                      {inbox.map((c) => (
-                        <li
-                          key={c.conversation_id}
-                          className="group-row"
-                          style={{
-                            padding: "0.25rem 0.2rem",
-                            cursor: "pointer",
-                            background:
-                              activeConversation?.conversation_id ===
-                              c.conversation_id
-                                ? "rgba(59,130,246,0.15)"
-                                : "transparent",
-                            borderRadius: "0.5rem",
-                          }}
-                          onClick={() => openConversationFromInbox(c)}
-                        >
-                          <div className="group-main">
-                            <span className="group-name">
-                              {c.partner.first_name} {c.partner.last_name} {/* Names are now store in Partner - Rise */}
-                            </span>
-                            <span
-                              className="group-meta"
-                              style={{ fontSize: "0.75rem" }}
-                            >
-                              {c.last_message
-                                ? truncatePreview(c.last_message, 70)
-                                : "No messages yet"}
-                            </span>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-
-                  {/* Requests */}
-                  <div
-                    className="group-meta"
-                    style={{ fontSize: "0.8rem", marginTop: "0.75rem" }}
-                  >
-                    Requests
-                  </div>
-                  {requests.length === 0 ? (
-                    <p className="group-meta">No pending requests.</p>
-                  ) : (
-                    <ul className="clean-list">
-                      {requests.map((r) => (
-                        <li key={r.request_id} className="group-row">
-                          <div className="group-main">
-                            <span className="group-name">
-                              {r.requester_name ||
-                                `${r.first_name} ${r.last_name || ""}`}
-                            </span>
-                            <span
-                              className="group-meta"
-                              style={{ fontSize: "0.75rem" }}
-                            >
-                              Message request
-                            </span>
-                          </div>
-                          <div style={{ display: "flex", gap: "0.25rem" }}>
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-primary"
-                              onClick={() =>
-                                handleRespondToRequest(r, "accept")
-                              }
-                            >
-                              Accept
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-ghost"
-                              onClick={() =>
-                                handleRespondToRequest(r, "reject")
-                              }
-                            >
-                              Ignore
-                            </button>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-
-                {/* RIGHT: active conversation */}
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    minHeight: 0,
-                  }}
-                >
-                  {activeConversation ? (
-                    <>
-                      {/* header for the current DM */}
-                      <div
-                        className="card-header"
-                        style={{
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          padding: "0 0 0.35rem 0",
-                        }}
-                      >
-                        <div>
-                          <div
-                            className="card-title"
-                            style={{ fontSize: "0.9rem" }}
-                          >
-                            {activeConversation.partner.first_name}{" "}
-                            {activeConversation.partner.last_name}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* messages list */}
-                      <div
-                        className="scroll-list"
-                        style={{
-                          maxHeight: "240px",
-                          padding: "0.75rem 0.9rem",
-                          borderRadius: "0.75rem",
-                          border: "1px solid rgba(148,163,184,0.35)",
-                          marginBottom: "0.5rem",
-                          flex: 1,
-                          minHeight: 0,
-                        }}
-                      >
-                        {dmMessages.length === 0 ? (
-                          <p className="group-meta">
-                            No messages yet. Say hi and break the ice 👋
-                          </p>
-                        ) : (
-                          <ul className="clean-list">
-                            {dmMessages.map((msg) => (
-                              <li
-                                key={msg.message_id}
-                                style={{
-                                  display: "flex",
-                                  flexDirection:
-                                    msg.sender_user_id === currentUser?.user_id
-                                      ? "row-reverse"
-                                      : "row",
-                                  marginBottom: "0.5rem",
-                                }}
-                              >
-                                <div
-                                  style={{
-                                    maxWidth: "70%",
-                                    padding: "0.45rem 0.6rem",
-                                    borderRadius: "0.75rem",
-                                    fontSize: "0.9rem",
-                                    border:
-                                      "1px solid rgba(148,163,184,0.6)",
-                                  }}
-                                >
-                                  <div
-                                    style={{
-                                      fontWeight: 500,
-                                      marginBottom: "0.15rem",
-                                      fontSize: "0.8rem",
-                                      opacity: 0.9,
-                                    }}
-                                  >
-                                    {msg.sender_user_id ===
-                                    currentUser?.user_id
-                                      ? "You"
-                                      : `${msg.first_name} ${msg.last_name}`}
-                                  </div>
-                                  <div>{msg.content}</div>
-                                  <div
-                                    className="group-meta"
-                                    style={{
-                                      marginTop: "0.15rem",
-                                      fontSize: "0.75rem",
-                                    }}
-                                  >
-                                    {formatTime(msg.sent_time)}
-                                  </div>
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-
-                      {/* input */}
-                      <form
-                        onSubmit={handleSendDm}
-                        style={{
-                          display: "flex",
-                          gap: "0.5rem",
-                          alignItems: "flex-end",
-                        }}
-                      >
-                        <textarea
-                          placeholder={dmPlaceholder}
-                          value={dmInput}
-                          onChange={(e) => {
-                            setDmInput(e.target.value);
-                            e.target.style.height = "auto";
-                            e.target.style.height = `${e.target.scrollHeight}px`;
-                          }}
-                          style={{
-                            flex: 1,
-                            minHeight: "40px",
-                            maxHeight: "120px",
-                            padding: "0.45rem 0.6rem",
-                            borderRadius: "0.75rem",
-                            border: "1px solid rgba(148,163,184,0.6)",
-                            fontSize: "0.9rem",
-                            resize: "none",
-                            overflowY: "auto",
-                          }}
-                          disabled={disableDmInput}
-                        />
-                        <button
-                          type="submit"
-                          className="btn btn-primary"
-                          disabled={disableDmInput || !dmInput.trim()}
-                        >
-                          Send
-                        </button>
-                      </form>
-
-                      {isRejectedRequest && (
-                        <p
-                          className="group-meta"
-                          style={{ marginTop: "0.25rem", color: "#f55" }}
-                        >
-                          This message request was ignored.
-                        </p>
-                      )}
-                    </>
-                  ) : (
-                    <p className="group-meta" style={{ paddingTop: "0.5rem" }}>
-                      Select a conversation or accept a request to start
-                      chatting.
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-        </>
-      )}
-
-      {/* Match profile popup */}
+      {/* ============== MATCH PROFILE POPUP ============== */}
       {selectedMatch && (
         <div
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(15,23,42,0.65)",
+            background: "rgba(10, 22, 40, 0.75)",
+            backdropFilter: "blur(4px)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             zIndex: 60,
+            padding: "1rem",
           }}
           onClick={() => setSelectedMatch(null)}
         >
           <div
-            className="card card-subtle"
+            className="crewmate-card"
             style={{
-              width: "480px",
-              maxWidth: "90vw",
-              maxHeight: "80vh",
+              width: "500px",
+              maxWidth: "100%",
+              maxHeight: "85vh",
               overflowY: "auto",
-              padding: "1.25rem 1.5rem",
+              padding: "1.5rem 1.75rem",
             }}
             onClick={(e) => e.stopPropagation()}
           >
             <div
-              className="card-header"
               style={{
+                display: "flex",
                 justifyContent: "space-between",
-                alignItems: "center",
-                padding: 0,
-                marginBottom: "0.75rem",
+                alignItems: "flex-start",
+                gap: "0.75rem",
+                marginBottom: "1rem",
+                position: "relative",
+                zIndex: 1,
               }}
             >
-              <div className="card-title" style={{ fontSize: "1.1rem" }}>
-                {selectedMatch.first_name} {selectedMatch.last_name}
+              <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
+                {selectedMatch.profile_image_url ? (
+                  <img
+                    src={selectedMatch.profile_image_url}
+                    alt={`${selectedMatch.first_name} ${selectedMatch.last_name}`}
+                    className="crewmate-avatar"
+                    style={{ width: 80, height: 80 }}
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                    }}
+                  />
+                ) : (
+                  <div
+                    className="crewmate-avatar crewmate-avatar-placeholder"
+                    style={{ width: 80, height: 80, fontSize: "1.6rem" }}
+                  >
+                    {initialsFromName(
+                      selectedMatch.first_name,
+                      selectedMatch.last_name,
+                    )}
+                  </div>
+                )}
+                <div>
+                  <h3
+                    className="manifest-title"
+                    style={{ fontSize: "1.25rem", margin: 0 }}
+                  >
+                    {selectedMatch.first_name} {selectedMatch.last_name}
+                  </h3>
+                  <p className="crewmate-meta">
+                    {selectedMatch.age ? `Age ${selectedMatch.age} · ` : ""}
+                    {(selectedMatch.shared_courses ?? 0)} shared course
+                    {selectedMatch.shared_courses === 1 ? "" : "s"}
+                  </p>
+                </div>
               </div>
               <button
                 type="button"
-                className="btn btn-ghost"
+                className="crewmate-btn crewmate-btn-ghost"
                 onClick={() => setSelectedMatch(null)}
               >
-                Close
+                ✕
               </button>
             </div>
 
             <div
-              style={{
-                display: "flex",
-                gap: "1rem",
-                marginBottom: "0.75rem",
-                alignItems: "flex-start",
-              }}
+              className="crewmate-traits"
+              style={{ marginBottom: "0.85rem" }}
             >
-              {selectedMatch.profile_image_url && (
-                <img
-                  src={selectedMatch.profile_image_url}
-                  alt={`${selectedMatch.first_name} ${selectedMatch.last_name}`}
-                  style={{
-                    width: "72px",
-                    height: "72px",
-                    borderRadius: "999px",
-                    objectFit: "cover",
-                    border: "1px solid rgba(148,163,184,0.6)",
-                  }}
-                  onError={(e) => {
-                    e.currentTarget.style.display = "none";
-                  }}
-                />
+              {selectedMatch.study_style && (
+                <span className="crewmate-trait">
+                  {selectedMatch.study_style}
+                </span>
               )}
-
-              <div>
-                {selectedMatch.age && (
-                  <p className="group-meta">Age {selectedMatch.age}</p>
-                )}
-                <p className="group-meta">
-                  Shared courses: {selectedMatch.shared_courses ?? 0}
-                </p>
-              </div>
+              {selectedMatch.meeting_pref && (
+                <span className="crewmate-trait">
+                  {selectedMatch.meeting_pref === "in_person"
+                    ? "in-person"
+                    : selectedMatch.meeting_pref}
+                </span>
+              )}
+              {selectedMatch.study_goal && (
+                <span className="crewmate-trait">
+                  {selectedMatch.study_goal}
+                </span>
+              )}
+              {selectedMatch.focus_time_pref && (
+                <span className="crewmate-trait">
+                  {selectedMatch.focus_time_pref}
+                </span>
+              )}
+              {selectedMatch.noise_pref && (
+                <span className="crewmate-trait">
+                  {selectedMatch.noise_pref}
+                </span>
+              )}
             </div>
 
-            <div style={{ marginBottom: "0.75rem" }}>
-              <p className="group-meta">
-                Style: {selectedMatch.study_style} · Meeting:{" "}
-                {selectedMatch.meeting_pref} · Goal: {selectedMatch.study_goal}
-              </p>
-            </div>
-
-            <div>
-              <div
-                className="card-title"
-                style={{ fontSize: "0.95rem", marginBottom: "0.35rem" }}
+            <div style={{ position: "relative", zIndex: 1 }}>
+              <strong style={{ color: "#2a1808" }}>Bio</strong>
+              <p
+                className="crewmate-bio"
+                style={{ marginTop: "0.35rem" }}
               >
-                Bio
-              </div>
-              <p className="group-meta">
                 {selectedMatch.bio && selectedMatch.bio.trim().length > 0
                   ? selectedMatch.bio
-                  : "This student hasn't added a bio yet."}
+                  : "This matey hasn't written a tale yet."}
               </p>
             </div>
           </div>

@@ -3,3 +3,7 @@ Project phase 3/backend/.venv/
 *.pyc
 .env
 node_modules/
+
+# User-uploaded files (profile pictures, resource uploads) — do not commit
+Project phase 3/backend/uploads/
+

@@ -9,39 +9,50 @@ from models import ChatMessage, ChatMessageResponse
 router = APIRouter()
 
 
-@router.get("/{group_id}/chat", response_model=list[ChatMessageResponse])
+@router.get("/{group_id}/chat", response_model=list[dict])
 def get_chat_messages(group_id: int, limit: int = Query(50, ge=1, le=500)):
     """
-    Returns latest chat messages for a group.
-    Wraps GetChatMessagesForGroup stored procedure.
+    Returns latest chat messages for a group, including sender's name.
+    Joins Users inline so the frontend can render names instead of IDs.
     """
     conn = None
     cursor = None
 
     try:
         conn = get_db_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(dictionary=True)
 
-        cursor.callproc("GetChatMessagesForGroup", (group_id, limit))
+        cursor.execute(
+            """
+            SELECT c.message_id,
+                   c.user_id,
+                   c.content,
+                   c.sent_time,
+                   u.first_name,
+                   u.last_name
+            FROM Chat_Message AS c
+            JOIN Users AS u ON u.user_id = c.user_id
+            WHERE c.group_id = %s
+            ORDER BY c.sent_time ASC, c.message_id ASC
+            LIMIT %s
+            """,
+            (int(group_id), int(limit)),
+        )
+        rows = cursor.fetchall() or []
 
         messages = []
-
-        for result in cursor.stored_results():
-            rows = result.fetchall()
-            col_names = result.column_names
-            for row in rows:
-                row_dict = dict(zip(col_names, row))
-                sent = row_dict["sent_time"]
-                messages.append(
-                    {
-                        "message_id": row_dict["message_id"],
-                        "user_id": row_dict["user_id"],
-                        "content": row_dict["content"],
-                        "sent_time": sent.isoformat()
-                        if isinstance(sent, datetime)
-                        else sent,
-                    }
-                )
+        for row in rows:
+            sent = row.get("sent_time")
+            messages.append(
+                {
+                    "message_id": row.get("message_id"),
+                    "user_id": row.get("user_id"),
+                    "first_name": row.get("first_name"),
+                    "last_name": row.get("last_name"),
+                    "content": row.get("content"),
+                    "sent_time": sent.isoformat() if isinstance(sent, datetime) else sent,
+                }
+            )
 
         return messages
 

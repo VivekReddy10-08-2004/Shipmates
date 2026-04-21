@@ -29,7 +29,12 @@ SELECT
     g.group_name,
     gm.role,
     u.user_id,
-    CONCAT(u.first_name, ' ', u.last_name) AS user_name
+    CONCAT(u.first_name, ' ', u.last_name) AS user_name,
+    (
+        SELECT MAX(cm.sent_time)
+        FROM Chat_Message cm
+        WHERE cm.group_id = g.group_id
+    ) AS last_sent_at
 FROM Group_Member AS gm
 JOIN Study_Group AS g ON g.group_id = gm.group_id
 JOIN Users AS u ON u.user_id = gm.user_id
@@ -241,6 +246,7 @@ def get_my_groups(user_id: int = Query(...)):
 
         groups = []
         for row_dict in rows:
+            last_sent = row_dict.get("last_sent_at")
             groups.append(
                 {
                     "group_id": _json_friendly(row_dict.get("group_id")),
@@ -248,6 +254,9 @@ def get_my_groups(user_id: int = Query(...)):
                     "role": _json_friendly(row_dict.get("role")),
                     "user_id": _json_friendly(row_dict.get("user_id")),
                     "user_name": _json_friendly(row_dict.get("user_name")),
+                    "last_sent_at": last_sent.isoformat()
+                    if hasattr(last_sent, "isoformat")
+                    else last_sent,
                 }
             )
 

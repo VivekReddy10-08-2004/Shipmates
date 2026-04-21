@@ -23,40 +23,51 @@ from routes.generate_routes import router as generate_router
 
 from db import get_db_connection as get_db
 
-# Load environment variables
-load_dotenv()
+# Load environment variables from the .env that sits next to this file,
+# not just the current working directory (which may be the project root).
+_here = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(_here, ".env"), override=False)
 
 # Signed cookie session (same-site with Vite dev server + credentials: include)
-SESSION_SECRET = os.getenv("SESSION_SECRET", "dev-only-change-me-shipmates")
+SESSION_SECRET = os.getenv("SESSION_SECRET")
+if not SESSION_SECRET:
+    raise RuntimeError(
+        "SESSION_SECRET is not set. Copy backend/.env.example to backend/.env "
+        "and fill in a long random hex string for SESSION_SECRET."
+    )
 
 
 def seed_admin_user():
     """Auto-create admin user on first run if it doesn't exist."""
-    admin_username = os.getenv("ADMIN_USERNAME", "admin")
-    admin_password = os.getenv("ADMIN_PASSWORD", "admin")
-    
+    admin_username = os.getenv("ADMIN_USERNAME")
+    admin_password = os.getenv("ADMIN_PASSWORD")
+
+    if not admin_username or not admin_password:
+        # No admin creds configured — skip silently (normal for contributor setups).
+        return
+
     conn = get_db()
     if not conn:
         print("[SEED] Database connection failed; skipping admin user seed.")
         return
-    
+
     cursor = conn.cursor(dictionary=True)
     try:
-        # Check if admin user exists
         cursor.execute("SELECT user_id FROM users WHERE email = %s", (admin_username,))
         existing = cursor.fetchone()
-        
+
         if not existing:
-            # Create admin user (adjust fields to match your users table schema)
+            import bcrypt
+            hashed = bcrypt.hashpw(admin_password.encode(), bcrypt.gensalt()).decode()
             cursor.execute(
                 """
                 INSERT INTO users (first_name, last_name, email, password_hash, bio)
                 VALUES (%s, %s, %s, %s, %s)
                 """,
-                ("Admin", "User", admin_username, admin_password, "Default admin account")
+                ("Admin", "User", admin_username, hashed, "Default admin account"),
             )
             conn.commit()
-            print(f"[SEED] Admin user created: {admin_username}/{admin_password}")
+            print(f"[SEED] Admin user created: {admin_username}")
         else:
             print(f"[SEED] Admin user already exists: {admin_username}")
     except Exception as e:
