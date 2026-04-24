@@ -1,4 +1,4 @@
-USE StudyBuddy;
+USE Shipmates;
 
 /* 
    These indexes target frequent filter, join, and order-by patterns
@@ -502,7 +502,7 @@ BEGIN
         -- Require at least one shared course
         sc.shared_courses > 0
 
-        -- Hide only if the request was REJECTED (don't hide pending/accepted —
+        -- Hide only if the request was REJECTED (don't hide pending/accepted,
         -- the frontend shows Request Sent / Accept Request / Open Chat states
         -- for those, so we still want the matches to appear in the grid).
         AND NOT EXISTS (
@@ -515,6 +515,17 @@ BEGIN
                 (mr.target_user_id = p_user_id AND mr.requester_user_id = sc.other_user_id)
               )
               AND mr.request_status = 'rejected'
+        )
+
+        -- Hide users who are already in a group with me. If we're crewmates,
+        -- there's no point suggesting them as a one-on-one match.
+        AND NOT EXISTS (
+            SELECT 1
+            FROM Group_Member gm_me
+            JOIN Group_Member gm_other
+              ON gm_other.group_id = gm_me.group_id
+            WHERE gm_me.user_id    = p_user_id
+              AND gm_other.user_id = sc.other_user_id
         )
 
         -- respect my preferred age range (if set)

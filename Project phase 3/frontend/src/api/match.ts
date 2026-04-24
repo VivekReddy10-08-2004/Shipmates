@@ -130,6 +130,30 @@ export async function fetchMatchSuggestions(userId: any, limit = 20) {
   return apiFetch(`/match/suggestions?${params.toString()}`);
 }
 
+// Compatible Crews — groups suggested for this user
+export interface MatchedGroup {
+  group_id: number;
+  group_name: string;
+  course_id: number;
+  course_code?: string;
+  course_name?: string;
+  max_members: number;
+  member_count: number;
+  owner_id: number;
+  owner_name: string;
+  shared_courses_with_owner: number;
+  user_has_group_course: boolean;
+  match_score: number;
+}
+
+export async function fetchMatchingGroups(userId: any, limit = 20): Promise<MatchedGroup[]> {
+  const params = new URLSearchParams({
+    user_id: String(userId),
+    limit: String(limit),
+  });
+  return apiFetch<MatchedGroup[]>(`/match/groups?${params.toString()}`);
+}
+
 // ---- DM endpoints: prefix is /messages (matches backend mount) ----
 
 export async function startConversation(requesterUserId: any, targetUserId: any) {

@@ -12,11 +12,19 @@ import {
   fetchInbox,
   fetchMessageRequests,
   respondToMessageRequest,
+  fetchMatchingGroups,
   type Match,
   type Message,
   type MessageRequest,
+  type MatchedGroup,
 } from "../api/match.js";
-import { searchCourses } from "../api/studygroups.js";
+import {
+  searchCourses,
+  fetchMyGroupInvites,
+  respondToGroupInvite,
+  joinGroup,
+  type GroupInvite,
+} from "../api/studygroups.js";
 import { API_BASE } from "../api/base.js";
 import { type Course, type College, type User } from "../hooks/useCurrentUser.js";
 import { type Conversation } from "../api/match.js";
@@ -51,6 +59,9 @@ export default function StudyBuddyMatch() {
   const [isLoadingMatches, setIsLoadingMatches] = useState(false);
 
   const [matches, setMatches] = useState<Match[]>([]);
+  const [matchedGroups, setMatchedGroups] = useState<MatchedGroup[]>([]);
+  const [groupInvites, setGroupInvites] = useState<GroupInvite[]>([]);
+  const [pendingJoinGroupIds, setPendingJoinGroupIds] = useState<Set<number>>(new Set());
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
 
@@ -472,10 +483,62 @@ export default function StudyBuddyMatch() {
     } finally {
       setIsLoadingMatches(false);
     }
+
+    // load compatible groups + pending invites in parallel; failures non-fatal
+    try {
+      const [groups, invites] = await Promise.all([
+        fetchMatchingGroups(userId, 20),
+        fetchMyGroupInvites(userId, 50),
+      ]);
+      setMatchedGroups(groups || []);
+      setGroupInvites(invites || []);
+    } catch (err) {
+      console.error("Failed to load group matches/invites", err);
+    }
   }
 
   async function handleRefreshMatches() {
     await loadMatchesInternal();
+  }
+
+  async function handleRequestJoinGroup(g: MatchedGroup) {
+    const userId = currentUser?.user_id;
+    if (!userId) return;
+    try {
+      await joinGroup(g.group_id, userId);
+      setPendingJoinGroupIds((prev) => new Set(prev).add(g.group_id));
+      setInfo(`Join request sent to ${g.group_name}.`);
+    } catch (err) {
+      console.error(err);
+      if (err instanceof Error) setError(err.message || "Failed to send join request");
+    }
+  }
+
+  async function handleAcceptGroupInvite(invite: GroupInvite) {
+    const userId = currentUser?.user_id;
+    if (!userId) return;
+    try {
+      await respondToGroupInvite(invite.invite_id, "accept", userId);
+      setGroupInvites((prev) => prev.filter((i) => i.invite_id !== invite.invite_id));
+      setInfo(`You joined ${invite.group_name}!`);
+      // remove from compatible-groups grid if present (now a member)
+      setMatchedGroups((prev) => prev.filter((g) => g.group_id !== invite.group_id));
+    } catch (err) {
+      console.error(err);
+      if (err instanceof Error) setError(err.message || "Failed to accept invite");
+    }
+  }
+
+  async function handleDeclineGroupInvite(invite: GroupInvite) {
+    const userId = currentUser?.user_id;
+    if (!userId) return;
+    try {
+      await respondToGroupInvite(invite.invite_id, "reject", userId);
+      setGroupInvites((prev) => prev.filter((i) => i.invite_id !== invite.invite_id));
+    } catch (err) {
+      console.error(err);
+      if (err instanceof Error) setError(err.message || "Failed to decline invite");
+    }
   }
 
   async function handleRespondToRequest(req, action) {
@@ -627,7 +690,7 @@ export default function StudyBuddyMatch() {
             icon: "📚",
             title: "2. Add your courses",
             body:
-              "Pick up to 5 courses. We only match you with people who share at least one class — that's the magic.",
+              "Pick up to 5 courses. We only match you with people who share at least one class. That's the magic.",
           },
           {
             target: '[data-tour="manifest-save"]',
@@ -753,7 +816,7 @@ export default function StudyBuddyMatch() {
         icon: "📚",
         title: "2. Add your courses",
         body:
-          "Pick up to 5 courses. We only match you with people who share at least one class — that's the magic.",
+          "Pick up to 5 courses. We only match you with people who share at least one class. That's the magic.",
       },
       {
         target: '[data-tour="manifest-save"]',
@@ -834,7 +897,7 @@ export default function StudyBuddyMatch() {
           <div>
             <strong style={{ color: "var(--gold)" }}>New to The Dock?</strong>
             <p style={{ margin: "0.15rem 0 0", color: "var(--text-muted)", fontSize: "0.88rem" }}>
-              Take the quick tour — we'll walk you through setting up your profile.
+              Take the quick tour and we'll walk you through setting up your profile.
             </p>
           </div>
           <button
@@ -883,9 +946,9 @@ export default function StudyBuddyMatch() {
                     onChange={handleChange}
                     className="manifest-select"
                   >
-                    <option value="solo">Solo — I work alone</option>
-                    <option value="pair">Pair — I like a study buddy</option>
-                    <option value="group">Group — bring the whole crew</option>
+                    <option value="solo">Solo (I work alone)</option>
+                    <option value="pair">Pair (I like a study buddy)</option>
+                    <option value="group">Group (bring the whole crew)</option>
                   </select>
                 </div>
 
@@ -1165,7 +1228,7 @@ export default function StudyBuddyMatch() {
           {matches.length === 0 ? (
             <div className="dock-empty">
               <p style={{ margin: 0, fontSize: "1rem", marginBottom: "0.5rem" }}>
-                🧭 No mateys in sight yet.
+                No mateys in sight yet.
               </p>
               <p style={{ margin: 0, fontSize: "0.85rem" }}>
                 {initialized
@@ -1180,21 +1243,6 @@ export default function StudyBuddyMatch() {
                 return (
                   <div key={m.other_user_id} className="crewmate-card">
                     <div className="crewmate-card-top">
-                      {m.profile_image_url ? (
-                        <img
-                          src={m.profile_image_url}
-                          alt={`${m.first_name} ${m.last_name}`}
-                          className="crewmate-avatar"
-                          onError={(e) => {
-                            e.currentTarget.style.display = "none";
-                          }}
-                        />
-                      ) : (
-                        <div className="crewmate-avatar crewmate-avatar-placeholder">
-                          {initialsFromName(m.first_name, m.last_name)}
-                        </div>
-                      )}
-
                       <div className="crewmate-info">
                         <button
                           type="button"
@@ -1257,6 +1305,116 @@ export default function StudyBuddyMatch() {
                       >
                         View
                       </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ============== INCOMING GROUP INVITES ============== */}
+      {hasProfile && !showProfileForm && groupInvites.length > 0 && (
+        <section className="section">
+          <h2 className="dock-section-title">Crew Invitations</h2>
+          <p className="dock-section-sub">
+            Crews that have invited you to set sail with them.
+          </p>
+          <div className="crewmate-grid">
+            {groupInvites.map((inv) => (
+              <div key={inv.invite_id} className="crewmate-card">
+                <div className="crewmate-card-top">
+                  <div className="crewmate-info">
+                    <div className="crewmate-name" style={{ fontWeight: 600 }}>
+                      {inv.group_name}
+                    </div>
+                    <p className="crewmate-meta">
+                      {inv.course_code ? `${inv.course_code} · ` : ""}
+                      {inv.member_count}/{inv.max_members} aboard
+                    </p>
+                    <p className="crewmate-meta" style={{ fontSize: "0.78rem" }}>
+                      Invited by {inv.invited_by_name}
+                    </p>
+                  </div>
+                </div>
+                <div className="crewmate-actions">
+                  <button
+                    type="button"
+                    className="crewmate-btn crewmate-btn-primary"
+                    onClick={() => handleAcceptGroupInvite(inv)}
+                  >
+                    Accept
+                  </button>
+                  <button
+                    type="button"
+                    className="crewmate-btn crewmate-btn-ghost"
+                    onClick={() => handleDeclineGroupInvite(inv)}
+                  >
+                    Decline
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ============== COMPATIBLE CREWS ============== */}
+      {hasProfile && !showProfileForm && (
+        <section className="section">
+          <h2 className="dock-section-title">Compatible Crews</h2>
+          <p className="dock-section-sub">
+            Study groups that share your courses and study style.
+          </p>
+
+          {matchedGroups.length === 0 ? (
+            <div className="dock-empty">
+              <p style={{ margin: 0, fontSize: "1rem", marginBottom: "0.5rem" }}>
+                No crews on the horizon yet.
+              </p>
+              <p style={{ margin: 0, fontSize: "0.85rem" }}>
+                Add more courses to your manifest, or check back as new crews are formed.
+              </p>
+            </div>
+          ) : (
+            <div className="crewmate-grid">
+              {matchedGroups.map((g) => {
+                const alreadyRequested = pendingJoinGroupIds.has(g.group_id);
+                return (
+                  <div key={g.group_id} className="crewmate-card">
+                    <div className="crewmate-card-top">
+                      <div className="crewmate-info">
+                        <div className="crewmate-name" style={{ fontWeight: 600 }}>
+                          {g.group_name}
+                        </div>
+                        <p className="crewmate-meta">
+                          {g.course_code ? `${g.course_code} · ` : ""}
+                          {g.member_count}/{g.max_members} aboard
+                        </p>
+                        <p className="crewmate-meta" style={{ fontSize: "0.78rem" }}>
+                          Captained by {g.owner_name}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="crewmate-actions">
+                      {alreadyRequested ? (
+                        <button
+                          type="button"
+                          className="crewmate-btn crewmate-btn-ghost"
+                          disabled
+                        >
+                          Request Sent
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="crewmate-btn crewmate-btn-primary"
+                          onClick={() => handleRequestJoinGroup(g)}
+                        >
+                          Request to Join
+                        </button>
+                      )}
                     </div>
                   </div>
                 );

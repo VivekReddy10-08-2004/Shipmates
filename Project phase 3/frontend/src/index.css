@@ -1031,6 +1031,7 @@ ul.clean-list {
 .crews-page .modal p,
 .crews-page .modal label,
 .crews-page .modal li,
+.crews-page .modal .group-name,
 .crews-page .modal .group-meta {
   color: #3d2610;
 }
