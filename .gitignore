@@ -10,3 +10,15 @@ Project phase 3/backend/uploads/
 # Vite build output
 Project phase 3/frontend/dist/
 
+# Vite dev cache
+**/.vite/
+
+# Pytest cache
+.pytest_cache/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
