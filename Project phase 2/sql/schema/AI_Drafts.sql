@@ -1,4 +1,4 @@
-USE StudyBuddy;
+USE Shipmates;
 
 CREATE TABLE IF NOT EXISTS ai_draft_set (
     draft_set_id INT AUTO_INCREMENT PRIMARY KEY,

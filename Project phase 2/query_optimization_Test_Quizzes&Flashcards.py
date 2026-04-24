@@ -2,16 +2,16 @@ import mysql.connector as mc
 import time
 
 """Author: Vivek
-Query Optimization Analysis for Quizzes and Flashcards in StudyBuddy Database."""
-# Connecting to the Database 
+Query Optimization Analysis for Quizzes and Flashcards in Shipmates Database."""
+# Connecting to the Database
 def get_connection():
-    """Establishes a connection to the StudyBuddy database."""
+    """Establishes a connection to the Shipmates database."""
     return mc.connect(
         host="localhost",
         port=3306,
         user="root",
         password="vivek@143",
-        database="StudyBuddy",
+        database="Shipmates",
     )
 
 #Benchmark Helper Functions 
@@ -59,7 +59,7 @@ def main():
     """
     Main benchmarking script.
     
-    ASSUMPTION: The 'StudyBuddy' database and all its data
+    ASSUMPTION: The 'Shipmates' database and all its data
     (including quizzes/answers) have ALREADY been loaded
     by the build_database.py script.
     """

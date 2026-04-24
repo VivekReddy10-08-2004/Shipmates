@@ -5,7 +5,7 @@
 -- Note: Assumes 'users' and 'courses' tables are created already,
 -- ------------------------------------------------------------
 
-USE StudyBuddy;
+USE Shipmates;
 
 -- LOOKUP TABLES (New Tables for Normalized Types)
 -- ============================================================

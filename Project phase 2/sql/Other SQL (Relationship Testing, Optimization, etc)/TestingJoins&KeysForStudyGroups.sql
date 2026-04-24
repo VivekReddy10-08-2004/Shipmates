@@ -1,4 +1,4 @@
-USE StudyBuddy;
+USE Shipmates;
 
 -- groups + their course
 SELECT g.group_id, g.group_name, g.max_members, g.is_private, g.created_time,

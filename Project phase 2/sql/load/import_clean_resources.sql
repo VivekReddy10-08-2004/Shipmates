@@ -1,6 +1,6 @@
-use StudyBuddy;
+use Shipmates;
 
-USE StudyBuddy;
+USE Shipmates;
 
 LOAD DATA LOCAL INFILE 'data/Clean_data/course_resources_cleaned.csv'
 INTO TABLE resource

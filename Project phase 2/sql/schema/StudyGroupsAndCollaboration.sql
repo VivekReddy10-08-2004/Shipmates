@@ -1,4 +1,4 @@
-Use StudyBuddy;
+Use Shipmates;
 
 CREATE TABLE Study_Group(
 	group_id INT PRIMARY KEY AUTO_INCREMENT,
