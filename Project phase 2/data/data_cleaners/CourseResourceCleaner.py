@@ -118,7 +118,7 @@ print(f"[OK] Cleaned CSV -> {CLEAN_CSV}")
 # Write sql
 
 lines = [
-    "USE StudyBuddy;",
+    "USE Shipmates;",
     "START TRANSACTION;"
 ]
 

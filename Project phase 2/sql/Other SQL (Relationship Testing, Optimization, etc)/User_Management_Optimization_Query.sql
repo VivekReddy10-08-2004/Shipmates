@@ -1,4 +1,4 @@
-use StudyBuddy;
+use Shipmates;
 -- By Rise Akizaki
 
 -- Query Example 1 for Analysis

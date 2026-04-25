@@ -1,4 +1,4 @@
-USE StudyBuddy; -- Had to change the import from USE flashcardsdb, since it kept giving me an error otherwise - Rise
+USE Shipmates; -- Had to change the import from USE flashcardsdb, since it kept giving me an error otherwise - Rise
 -- see if we already have users. 
 SELECT user_id, email FROM Users limit 10;
 

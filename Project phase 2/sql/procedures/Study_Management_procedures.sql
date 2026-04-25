@@ -2,7 +2,7 @@
 -- Sarah Kayembe
 -- STORED PROCEDURES FOR STUDY MANAGEMENT & GAMIFICATION SYSTEM
 -- ============================================================
-USE StudyBuddy;
+USE Shipmates;
 
 DELIMITER //
 

@@ -5,7 +5,7 @@
 --  - Update @CREATOR_ID to an existing Users.user_id in your DB
 --  - Update paths below only if your CSVs move (use forward slashes)
 
-use StudyBuddy;
+use Shipmates;
 
 --  Configure quiz metadata and creator 
 SET @CREATOR_ID := 1001;  -- Change to an existing user_id in the Users table ( testing with admin for now)

@@ -821,6 +821,352 @@ def generate_invite_code(group_id: int, owner_id: int = Body(..., embed=True)):
             conn.close()
 
 
+# ───────── Group ↔ Individual matching + invites ──────────────────
+
+@router.get("/{group_id}/suggestions", response_model=list[dict])
+def get_group_suggested_users(
+    group_id: int,
+    owner_id: int = Query(...),
+    limit: int = Query(20, ge=1, le=50),
+):
+    """Owner-only: ranked users to invite to this group."""
+    conn = None
+    cursor = None
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        try:
+            cursor.callproc("GetMatchingUsersForGroup", (group_id, int(owner_id), limit))
+        except MySQLError as e:
+            msg = str(e)
+            if "NOT_OWNER" in msg:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Only the group owner can view suggestions.",
+                )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=msg,
+            )
+
+        results = []
+        for result in cursor.stored_results():
+            for r in result.fetchall():
+                r["match_score"] = int(r.get("match_score", 0) or 0)
+                r["shared_courses_with_owner"] = int(r.get("shared_courses_with_owner", 0) or 0)
+                r["has_group_course"] = bool(r.get("has_group_course", 0))
+                results.append(r)
+
+        return results
+
+    except MySQLError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+
+@router.post("/{group_id}/invite", status_code=status.HTTP_201_CREATED, response_model=dict)
+def invite_user_to_group(
+    group_id: int,
+    payload: dict = Body(...),
+):
+    """
+    Owner-only: invite a user to join this group.
+
+    Body JSON: { "owner_id": 1005, "invited_user_id": 1042 }
+    """
+    data = payload or {}
+    owner_id = data.get("owner_id")
+    invited_user_id = data.get("invited_user_id")
+
+    if not owner_id or not invited_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="owner_id and invited_user_id are required",
+        )
+
+    conn = None
+    cursor = None
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        try:
+            cursor.callproc(
+                "InviteUserToGroup",
+                (group_id, int(invited_user_id), int(owner_id)),
+            )
+        except MySQLError as e:
+            conn.rollback()
+            msg = str(e)
+            if "NOT_OWNER" in msg:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Only the group owner can send invites.",
+                )
+            if "CANNOT_INVITE_SELF" in msg:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="You can't invite yourself.",
+                )
+            if "GROUP_NOT_FOUND" in msg:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Group not found",
+                )
+            if "GROUP_FULL" in msg:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Group is full.",
+                )
+            if "ALREADY_MEMBER" in msg:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="User is already a member.",
+                )
+            if "ALREADY_INVITED" in msg:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="User already has a pending invite.",
+                )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=msg,
+            )
+
+        invite_id = None
+        for result in cursor.stored_results():
+            row = result.fetchone()
+            if row:
+                invite_id = row.get("invite_id")
+                break
+
+        conn.commit()
+        return {"status": "invited", "invite_id": invite_id}
+
+    except MySQLError as e:
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+
+@router.get("/invites", response_model=list[dict])
+def get_my_group_invites(user_id: int = Query(...), limit: int = Query(50, ge=1, le=200)):
+    """Pending group invites for the current user."""
+    conn = None
+    cursor = None
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.callproc("GetGroupInvitesForUser", (int(user_id), limit))
+
+        invites = []
+        for result in cursor.stored_results():
+            for r in result.fetchall():
+                created_at = r.get("created_at")
+                if created_at is not None and hasattr(created_at, "isoformat"):
+                    created_at = created_at.isoformat()
+                invites.append(
+                    {
+                        "invite_id": r.get("invite_id"),
+                        "group_id": r.get("group_id"),
+                        "group_name": r.get("group_name"),
+                        "course_id": r.get("course_id"),
+                        "course_code": r.get("course_code"),
+                        "course_name": r.get("course_name"),
+                        "max_members": int(r.get("max_members", 0) or 0),
+                        "member_count": int(r.get("member_count", 0) or 0),
+                        "invited_by_user_id": r.get("invited_by_user_id"),
+                        "invited_by_name": r.get("invited_by_name"),
+                        "created_at": created_at,
+                    }
+                )
+
+        return invites
+
+    except MySQLError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+
+@router.post("/invites/{invite_id}/{action}", response_model=dict)
+def respond_to_group_invite(
+    invite_id: int,
+    action: str,
+    user_id: int = Query(...),
+):
+    """User responds to a group invite. action: 'accept' or 'reject'."""
+    if action not in ("accept", "reject"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="action must be 'accept' or 'reject'",
+        )
+
+    conn = None
+    cursor = None
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        try:
+            cursor.callproc("RespondToGroupInvite", (invite_id, int(user_id), action))
+        except MySQLError as e:
+            conn.rollback()
+            msg = str(e)
+            if "INVITE_NOT_FOUND" in msg:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Invite not found.",
+                )
+            if "NOT_YOUR_INVITE" in msg:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="This invite isn't yours.",
+                )
+            if "INVITE_NOT_PENDING" in msg:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Invite has already been answered.",
+                )
+            if "INVALID_ACTION" in msg:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid action.",
+                )
+            if "GROUP_FULL" in msg:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Group is full.",
+                )
+            if "ALREADY_MEMBER" in msg:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="You're already a member.",
+                )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=msg,
+            )
+
+        result_status = None
+        result_group_id = None
+        for result in cursor.stored_results():
+            row = result.fetchone()
+            if row:
+                result_status = row.get("invite_status")
+                result_group_id = row.get("group_id")
+                break
+
+        conn.commit()
+        return {
+            "status": result_status or action + "ed",
+            "group_id": result_group_id,
+        }
+
+    except MySQLError as e:
+        if conn is not None:
+            conn.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+
+@router.get("/{group_id}/invites/sent", response_model=list[dict])
+def get_invites_sent_by_group(group_id: int, owner_id: int = Query(...)):
+    """Owner-only: invites this group has sent (any status)."""
+    conn = None
+    cursor = None
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        try:
+            cursor.callproc("GetGroupInvitesSentByGroup", (group_id, int(owner_id)))
+        except MySQLError as e:
+            msg = str(e)
+            if "NOT_OWNER" in msg:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Only the group owner can view sent invites.",
+                )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=msg,
+            )
+
+        invites = []
+        for result in cursor.stored_results():
+            for r in result.fetchall():
+                created_at = r.get("created_at")
+                responded_at = r.get("responded_at")
+                if created_at is not None and hasattr(created_at, "isoformat"):
+                    created_at = created_at.isoformat()
+                if responded_at is not None and hasattr(responded_at, "isoformat"):
+                    responded_at = responded_at.isoformat()
+                invites.append(
+                    {
+                        "invite_id": r.get("invite_id"),
+                        "invited_user_id": r.get("invited_user_id"),
+                        "invited_user_name": r.get("invited_user_name"),
+                        "invite_status": r.get("invite_status"),
+                        "created_at": created_at,
+                        "responded_at": responded_at,
+                    }
+                )
+
+        return invites
+
+    except MySQLError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+    finally:
+        if cursor is not None:
+            cursor.close()
+        if conn is not None:
+            conn.close()
+
+
 @router.post("/join-with-code", response_model=dict)
 def join_with_code(payload: dict = Body(...)):
     """

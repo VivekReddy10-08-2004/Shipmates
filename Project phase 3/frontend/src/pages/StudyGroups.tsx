@@ -16,6 +16,8 @@ import {
   generateInviteCode,
   joinByInviteCode,
   searchCourses,
+  fetchGroupSuggestedUsers,
+  inviteUserToGroup,
   type Session,
   type Group,
   type ManageGroup,
@@ -23,6 +25,7 @@ import {
   type StudyRequest,
   type Member,
   type Invite,
+  type SuggestedMember,
 } from "../api/studygroups.js";
 import { formatDateOnly, formatTimeString, formatDateTime } from "../utils/dateFormat.js";
 import { openCrewChat } from "../utils/shipsLogApi.js";
@@ -75,9 +78,11 @@ export default function StudyGroups() {
   // manage members 
   const [manageGroup, setManageGroup] = useState<ManageGroup | null>(null); // { id, name, role } or null
   const [showManageModal, setShowManageModal] = useState(false);
-  const [manageTab, setManageTab] = useState("requests"); // "requests" | "members"
+  const [manageTab, setManageTab] = useState("requests"); // "requests" | "members" | "suggestions"
   const [manageRequests, setManageRequests] = useState<StudyRequest[]>([]);
   const [manageMembers, setManageMembers] = useState<Member[]>([]);
+  const [manageSuggestions, setManageSuggestions] = useState<SuggestedMember[]>([]);
+  const [invitedUserIds, setInvitedUserIds] = useState<Set<number>>(new Set());
   const [manageLoading, setManageLoading] = useState(false);
   const [manageError, setManageError] = useState("");
   const [inviteCodeInfo, setInviteCodeInfo] = useState<Invite | null>(null);
@@ -312,12 +317,31 @@ export default function StudyGroups() {
         const data = await fetchGroupMembers(groupId);
         setManageMembers(data);
       }
+
+      if (tab === "suggestions" && groupRole === "owner") {
+        const data = await fetchGroupSuggestedUsers(groupId, userId, 20);
+        setManageSuggestions(Array.isArray(data) ? data : []);
+        setInvitedUserIds(new Set());
+      }
     } catch (err) {
       console.error(err);
       if (err instanceof Error)
         setManageError(err.message || "Failed to load data");
     } finally {
       setManageLoading(false);
+    }
+  };
+
+  const handleInviteUser = async (suggestedUserId: number) => {
+    if (!manageGroup || !currentUser?.user_id) return;
+    try {
+      await inviteUserToGroup(manageGroup.id, currentUser.user_id, suggestedUserId);
+      setInvitedUserIds((prev) => new Set(prev).add(suggestedUserId));
+      showToastMessage("Invite sent", "success");
+    } catch (err) {
+      console.error(err);
+      if (err instanceof Error)
+        showToastMessage(err.message || "Failed to send invite", "error");
     }
   };
 
@@ -523,7 +547,7 @@ export default function StudyGroups() {
 
   const handleSelectCourseSuggestion = (course) => {
     setCourseId(course.course_id);
-    setCourseQuery(`${course.course_code} — ${course.course_name}`);
+    setCourseQuery(`${course.course_code}: ${course.course_name}`);
     setCourseSuggestions([]);
     loadData();
   };
@@ -578,7 +602,7 @@ export default function StudyGroups() {
               onClick={() => handleSelectCourseSuggestion(c)}
             >
               <div style={{ fontSize: "0.9rem", fontWeight: 500 }}>
-                {c.course_code} — {c.course_name}
+                {c.course_code}: {c.course_name}
               </div>
               {c.college_name && (
                 <div
@@ -965,7 +989,7 @@ export default function StudyGroups() {
           onClick={() => setShowScheduleModal(false)}
         >
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h2>Schedule session — {scheduleGroup.name}</h2>
+            <h2>Schedule session: {scheduleGroup.name}</h2>
 
             <form
               onSubmit={handleCreateSession}
@@ -1072,7 +1096,7 @@ export default function StudyGroups() {
           }}
         >
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h2>Manage members — {manageGroup.name}</h2>
+            <h2>Manage members: {manageGroup.name}</h2>
 
             {manageGroup.role === "owner" ? (
               <div className="tabs" style={{ marginBottom: "1rem" }}>
@@ -1101,6 +1125,19 @@ export default function StudyGroups() {
                   }}
                 >
                   Members
+                </button>
+                <button
+                  type="button"
+                  className={
+                    "tab-btn" +
+                    (manageTab === "suggestions" ? " tab-btn-active" : "")
+                  }
+                  onClick={() => {
+                    setManageTab("suggestions");
+                    loadManageData(manageGroup.id, "suggestions", manageGroup.role);
+                  }}
+                >
+                  Suggested members
                 </button>
               </div>
             ) : (
@@ -1155,8 +1192,7 @@ export default function StudyGroups() {
                               {r.full_name || `User ${r.user_id}`}
                             </span>
                             <span className="group-meta">
-                              Requested at:{" "}
-                              {r.request_date ? r.request_date : "—"}
+                              Requested {r.request_date ? formatDateTime(r.request_date) : ""}
                             </span>
                           </div>
                           <div style={{ display: "flex", gap: "0.5rem" }}>
@@ -1215,7 +1251,7 @@ export default function StudyGroups() {
                           </span>
                           <span className="group-meta">
                             role: {m.role}
-                            {m.joined_at ? ` · joined at ${m.joined_at}` : ""}
+                            {m.joined_at ? ` · joined ${formatDateTime(m.joined_at)}` : ""}
                           </span>
                         </div>
 
@@ -1235,6 +1271,75 @@ export default function StudyGroups() {
                 )}
               </div>
             )}
+
+            {/* Suggested members tab (owner only) */}
+            {manageGroup.role === "owner" &&
+              manageTab === "suggestions" &&
+              !manageLoading && (
+                <div>
+                  <div
+                    style={{
+                      fontWeight: 600,
+                      marginBottom: "0.5rem",
+                      fontSize: "0.95rem",
+                    }}
+                  >
+                    Suggested members
+                  </div>
+
+                  {manageSuggestions.length === 0 ? (
+                    <p style={{ fontSize: "0.9rem", opacity: 0.8 }}>
+                      No suggested matches yet.
+                    </p>
+                  ) : (
+                    <ul className="clean-list" style={{ margin: 0 }}>
+                      {manageSuggestions.map((s) => {
+                        const invited = invitedUserIds.has(s.user_id);
+                        return (
+                          <li
+                            key={s.user_id}
+                            className="group-row"
+                            style={{ alignItems: "center" }}
+                          >
+                            <div className="group-main">
+                              <span className="group-name">
+                                {s.first_name} {s.last_name}
+                              </span>
+                              <span className="group-meta">
+                                {s.has_group_course
+                                  ? "✓ takes this course · "
+                                  : ""}
+                                {s.shared_courses_with_owner > 0
+                                  ? `${s.shared_courses_with_owner} shared course${s.shared_courses_with_owner === 1 ? "" : "s"} · `
+                                  : ""}
+                                {s.study_style ? `${s.study_style} · ` : ""}
+                                match {s.match_score}
+                              </span>
+                            </div>
+                            {invited ? (
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                disabled
+                              >
+                                Invited
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className="btn btn-primary btn-sm"
+                                onClick={() => handleInviteUser(s.user_id)}
+                              >
+                                Invite
+                              </button>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              )}
 
             {manageGroup.role === "owner" && (
               <div

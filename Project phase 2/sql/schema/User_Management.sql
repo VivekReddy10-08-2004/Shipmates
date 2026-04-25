@@ -1,5 +1,5 @@
--- CREATE DATABASE StudyBuddy;, removed by Vivek, will cause errors
-use StudyBuddy;
+-- CREATE DATABASE Shipmates;, removed by Vivek, will cause errors
+use Shipmates;
 
 -- ----------------------------------------------------------------------------------------------
 -- Schema for User_Management

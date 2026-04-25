@@ -1,4 +1,4 @@
-use StudyBuddy;
+use Shipmates;
 -- By Rise Akizaki
 
 -- Inserting data into colleges table

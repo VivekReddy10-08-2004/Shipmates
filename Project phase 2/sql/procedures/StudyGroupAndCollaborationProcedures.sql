@@ -1,4 +1,4 @@
-USE StudyBuddy;
+USE Shipmates;
 
 /* 
    These indexes target frequent filter, join, and order-by patterns
@@ -290,27 +290,10 @@ BEGIN
   DECLARE v_min_age TINYINT UNSIGNED;
   DECLARE v_max_age TINYINT UNSIGNED;
 
-  -- Default age range logic:
-  --   age <= 20 -> [17, 23]
-  --   age  > 20 -> [age-3, age+3] clamped to [17, 80]
-  IF p_age IS NOT NULL THEN
-    IF p_pref_min_age IS NULL OR p_pref_max_age IS NULL THEN
-      IF p_age <= 20 THEN
-        SET v_min_age = 17;
-        SET v_max_age = 23;
-      ELSE
-        SET v_min_age = GREATEST(17, p_age - 3);
-        SET v_max_age = LEAST(80, p_age + 3);
-      END IF;
-    ELSE
-      SET v_min_age = p_pref_min_age;
-      SET v_max_age = p_pref_max_age;
-    END IF;
-  ELSE
-    -- No age provided; NULL
-    SET v_min_age = p_pref_min_age;
-    SET v_max_age = p_pref_max_age;
-  END IF;
+  -- Only apply a preferred age range when the caller explicitly set one.
+  -- (We used to auto-narrow to age ± 3 which silently hid valid matches.)
+  SET v_min_age = p_pref_min_age;
+  SET v_max_age = p_pref_max_age;
 
   INSERT INTO Match_Profile (
     user_id,
@@ -481,7 +464,7 @@ BEGIN
                     ELSE 0
                   END
 
-                + LEAST(c.shared_courses, 2) * 10
+                + LEAST(c.shared_courses, 3) * 25  -- shared courses weigh heavily (up to 75 pts)
 
                 + CASE
                     WHEN mp.age IS NOT NULL AND c.age IS NOT NULL THEN
@@ -516,10 +499,12 @@ BEGIN
         sc.match_score
     FROM scored_candidates AS sc
     WHERE
-        -- Require at least one shared course 
+        -- Require at least one shared course
         sc.shared_courses > 0
 
-        -- don’t show if there’s already a pending/accepted message request
+        -- Hide only if the request was REJECTED (don't hide pending/accepted,
+        -- the frontend shows Request Sent / Accept Request / Open Chat states
+        -- for those, so we still want the matches to appear in the grid).
         AND NOT EXISTS (
             SELECT 1
             FROM Message_Request mr
@@ -529,7 +514,18 @@ BEGIN
                 OR
                 (mr.target_user_id = p_user_id AND mr.requester_user_id = sc.other_user_id)
               )
-              AND mr.request_status IN ('pending', 'accepted')
+              AND mr.request_status = 'rejected'
+        )
+
+        -- Hide users who are already in a group with me. If we're crewmates,
+        -- there's no point suggesting them as a one-on-one match.
+        AND NOT EXISTS (
+            SELECT 1
+            FROM Group_Member gm_me
+            JOIN Group_Member gm_other
+              ON gm_other.group_id = gm_me.group_id
+            WHERE gm_me.user_id    = p_user_id
+              AND gm_other.user_id = sc.other_user_id
         )
 
         -- respect my preferred age range (if set)

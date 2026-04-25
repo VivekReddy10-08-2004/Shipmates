@@ -1,4 +1,4 @@
-use StudyBuddy;
+use Shipmates;
 -- Schema for Quizzes & Flashcards
 -- Author: Vivek Reddy Bhimavarapu
 

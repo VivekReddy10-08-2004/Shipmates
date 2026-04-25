@@ -18,7 +18,7 @@ def get_db_connection():
         port=int(os.getenv("MYSQL_PORT", 3306)),
         user=os.getenv("MYSQL_USER", "root"),
         password=password,
-        database=os.getenv("MYSQL_DB", "StudyBuddy"),
+        database=os.getenv("MYSQL_DB", "Shipmates"),
         autocommit=True,  # needed so profile edits don't lock
     )
 

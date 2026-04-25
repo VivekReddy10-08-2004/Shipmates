@@ -1,4 +1,4 @@
-use StudyBuddy;
+use Shipmates;
 -- By Rise Akizaki
 
 -- Testing Relationships between Users, Majors, and Colleges

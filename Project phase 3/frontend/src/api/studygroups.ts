@@ -242,6 +242,112 @@ export async function joinByInviteCode(inviteCode: string, userId: any) {
   });
 }
 
+// ───────── Group ↔ Individual matching + invites ─────────────────
+
+export interface SuggestedMember {
+  user_id: number;
+  first_name: string;
+  last_name: string;
+  college_id: number | null;
+  study_style: string | null;
+  meeting_pref: string | null;
+  study_goal: string | null;
+  focus_time_pref: string | null;
+  noise_pref: string | null;
+  age: number | null;
+  bio: string | null;
+  profile_image_url: string | null;
+  shared_courses_with_owner: number;
+  has_group_course: boolean;
+  match_score: number;
+}
+
+export interface GroupInvite {
+  invite_id: number;
+  group_id: number;
+  group_name: string;
+  course_id: number;
+  course_code?: string;
+  course_name?: string;
+  max_members: number;
+  member_count: number;
+  invited_by_user_id: number;
+  invited_by_name: string;
+  created_at: string;
+}
+
+export interface SentGroupInvite {
+  invite_id: number;
+  invited_user_id: number;
+  invited_user_name: string;
+  invite_status: "pending" | "accepted" | "rejected" | "expired";
+  created_at: string;
+  responded_at: string | null;
+}
+
+export async function fetchGroupSuggestedUsers(
+  groupId: number,
+  ownerId: number,
+  limit = 20,
+): Promise<SuggestedMember[]> {
+  const params = new URLSearchParams({
+    owner_id: String(ownerId),
+    limit: String(limit),
+  });
+  const data = await apiFetch(
+    `/groups/${groupId}/suggestions?${params.toString()}`,
+  );
+  return data as unknown as SuggestedMember[];
+}
+
+export async function inviteUserToGroup(
+  groupId: number,
+  ownerId: number,
+  invitedUserId: number,
+) {
+  return apiFetch(`/groups/${groupId}/invite`, {
+    method: "POST",
+    body: JSON.stringify({
+      owner_id: ownerId,
+      invited_user_id: invitedUserId,
+    }),
+  });
+}
+
+export async function fetchMyGroupInvites(
+  userId: number,
+  limit = 50,
+): Promise<GroupInvite[]> {
+  const params = new URLSearchParams({
+    user_id: String(userId),
+    limit: String(limit),
+  });
+  const data = await apiFetch(`/groups/invites?${params.toString()}`);
+  return data as unknown as GroupInvite[];
+}
+
+export async function respondToGroupInvite(
+  inviteId: number,
+  action: "accept" | "reject",
+  userId: number,
+) {
+  const params = new URLSearchParams({ user_id: String(userId) });
+  return apiFetch(`/groups/invites/${inviteId}/${action}?${params.toString()}`, {
+    method: "POST",
+  });
+}
+
+export async function fetchSentGroupInvites(
+  groupId: number,
+  ownerId: number,
+): Promise<SentGroupInvite[]> {
+  const params = new URLSearchParams({ owner_id: String(ownerId) });
+  const data = await apiFetch(
+    `/groups/${groupId}/invites/sent?${params.toString()}`,
+  );
+  return data as unknown as SentGroupInvite[];
+}
+
 export async function searchCourses(query: any, limit = 8) {
   const params = new URLSearchParams({
     q: query,

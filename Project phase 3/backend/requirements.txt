@@ -6,4 +6,5 @@ python-dotenv
 bcrypt
 python-multipart
 email-validator
+itsdangerous
 openai>=1.0.0

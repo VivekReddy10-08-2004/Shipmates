@@ -6,7 +6,7 @@ import mysql.connector
 #Author: Vivek
 
 """
-StudyBuddy DB builder
+Shipmates DB builder
 """
 
 
@@ -22,7 +22,7 @@ def _prompt(value: str, env_var: str, secret: bool = False) -> str:
     return entered.strip() or current
 
 # --- CONFIGURATION ---
-DB_NAME = "StudyBuddy"
+DB_NAME = "Shipmates"
 DB_CONFIG = {
     "host": _prompt("localhost", "MYSQL_HOST"),
     "port": int(_prompt("3306", "MYSQL_PORT")),
@@ -146,19 +146,21 @@ def main():
     sql_files_in_order = [
         # --- schemas ---
         "sql/schema/User_Management.sql",
-        "sql/schema/study_Management_script.sql", 
-        "sql/schema/StudyGroupsAndCollaboration.sql", 
+        "sql/schema/study_Management_script.sql",
+        "sql/schema/StudyGroupsAndCollaboration.sql",
         "sql/schema/Quizzes&Flashcards.sql",
+        "sql/schema/AI_Drafts.sql",
         # --- procedures ---
         "sql/procedures/Study_Management_procedures.sql",
         "sql/procedures/StudyGroupAndCollaborationProcedures.sql",
+        "sql/procedures/GroupInviteAndMatching.sql",
         # --- seed/data scripts ---
         "sql/load/User_Management_Data_Insertion.sql",
         "sql/load/User_Management_Relationship_Testing.sql",
         "sql/load/import_clean_resources.sql",  # Running this creates Users 1001, 1002, etc.
         "sql/load/import_clean_quiz.sql",
         "sql/load/fake_data_Script.sql",
-    ]  
+    ]
 
     try:
         # 1. Connect to MySQL server (no database)

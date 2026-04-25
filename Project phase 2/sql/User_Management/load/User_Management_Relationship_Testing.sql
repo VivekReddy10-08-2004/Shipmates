@@ -1,4 +1,4 @@
-use StudyBuddy;
+use Shipmates;
 
 -- Testing Relationships between Users, Majors, and Colleges
 
