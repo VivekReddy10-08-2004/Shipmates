@@ -1,9 +1,12 @@
 import { API_BASE } from "./base.js";
 
+export type GenerateKind = "quiz" | "flashcards" | "both";
+
 export interface GenerateFromNotesRequest {
   user_id: number;
   course_id: number;
   raw_text: string;
+  kind?: GenerateKind;
 }
 
 export interface GenerateFromNotesResponse {
@@ -64,6 +67,7 @@ export async function generateFromNotes(
 export interface ApproveDraftRequest {
   draft_set_id: number;
   creator_id: number;
+  kind?: GenerateKind;
 }
 
 export interface ApproveDraftResponse {

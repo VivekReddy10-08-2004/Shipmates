@@ -10,7 +10,13 @@ router = APIRouter()
 
 @router.post("/start", status_code=status.HTTP_200_OK, response_model=dict)
 def start_conversation(requester_user_id: int = Query(...), target_user_id: int = Query(...)):
-    """Find or create a 1-1 conversation between two users."""
+    """Find or create a 1-1 conversation between two users.
+
+    If the target has already sent a pending request to the requester,
+    this auto-accepts that existing request instead of creating a duplicate
+    outbound one — so two people both clicking "Send Crew Request" on each
+    other results in one accepted conversation, not two pending requests.
+    """
     if requester_user_id == target_user_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -24,6 +30,65 @@ def start_conversation(requester_user_id: int = Query(...), target_user_id: int 
         conn = get_db_connection()
         cur = conn.cursor(dictionary=True)
 
+        # --- Mutual-request auto-accept ---
+        # If the target ALREADY sent a pending request to us, accept it
+        # instead of creating a fresh one.
+        try:
+            cur.execute(
+                """
+                SELECT request_id FROM Message_Request
+                WHERE requester_user_id = %s
+                  AND target_user_id = %s
+                  AND request_status = 'pending'
+                LIMIT 1
+                """,
+                (int(target_user_id), int(requester_user_id)),
+            )
+            inbound = cur.fetchone()
+        except MySQLError:
+            inbound = None  # table may differ in prod; fall through to normal flow
+
+        if inbound and inbound.get("request_id"):
+            # Auto-accept the inbound request
+            try:
+                cur.callproc(
+                    "RespondToMessageRequest",
+                    (inbound["request_id"], "accept", int(requester_user_id)),
+                )
+                # Drain any returned rows from the stored proc
+                for result in cur.stored_results():
+                    result.fetchall()
+                conn.commit()
+            except MySQLError:
+                conn.rollback()
+                # If auto-accept fails, just continue to normal flow.
+
+            # Find the existing conversation (either direction)
+            try:
+                cur.execute(
+                    """
+                    SELECT conversation_id FROM Direct_Conversation
+                    WHERE (user_one_id = %s AND user_two_id = %s)
+                       OR (user_one_id = %s AND user_two_id = %s)
+                    LIMIT 1
+                    """,
+                    (
+                        int(requester_user_id),
+                        int(target_user_id),
+                        int(target_user_id),
+                        int(requester_user_id),
+                    ),
+                )
+                row = cur.fetchone()
+                if row and row.get("conversation_id") is not None:
+                    return {
+                        "conversation_id": row["conversation_id"],
+                        "auto_accepted": True,
+                    }
+            except MySQLError:
+                pass  # fall through to stored proc
+
+        # --- Normal flow: find-or-create a conversation + request ---
         cur.callproc("StartDirectConversation", (int(requester_user_id), int(target_user_id)))
 
         conversation_id = None
@@ -43,6 +108,8 @@ def start_conversation(requester_user_id: int = Query(...), target_user_id: int 
 
         return {"conversation_id": conversation_id}
 
+    except HTTPException:
+        raise
     except MySQLError as e:
         if conn:
             conn.rollback()

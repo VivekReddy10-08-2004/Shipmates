@@ -5,15 +5,21 @@ from dotenv import load_dotenv
 # Load .env if present
 load_dotenv()
 
+
 def get_db_connection():
+    password = os.getenv("MYSQL_PASSWORD")
+    if password is None:
+        raise RuntimeError(
+            "MYSQL_PASSWORD is not set. Copy backend/.env.example to backend/.env "
+            "and fill in your local MySQL password."
+        )
     return mysql.connector.connect(
         host=os.getenv("MYSQL_HOST", "127.0.0.1"),
         port=int(os.getenv("MYSQL_PORT", 3306)),
         user=os.getenv("MYSQL_USER", "root"),
-        # Use env var when present; fallback matches the password you provided
-        password=os.getenv("MYSQL_PASSWORD", "Tyvler22"),
+        password=password,
         database=os.getenv("MYSQL_DB", "StudyBuddy"),
-        autocommit=True # need this because saving profile changes kept getting locked
+        autocommit=True,  # needed so profile edits don't lock
     )
 
 

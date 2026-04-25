@@ -11,38 +11,42 @@ import { AccountPage, EditAccountPage } from "./pages/User.js";
 
 import NavBar from "./components/NavBar.js";
 import StudyBuddyMatch from "./pages/StuddyBuddyMatch.js";
+import RequireAuth from "./components/RequireAuth.js";
+import GlobalShipsLog from "./components/GlobalShipsLog.js";
 
 function App() {
   return (
     <BrowserRouter>
       <NavBar />
 
-      {/* Page content */}
-            <Routes>
-        {/* Default entry now points to Login page */}
+      {/* Global Ship's Log — renders on every authed page (component self-gates) */}
+      <GlobalShipsLog />
+
+      {/* Page content — wrapper class handles shifting when sidebar is open */}
+      <div className="page-content">
+        <Routes>
+        {/* Public — anyone can hit these */}
         <Route path="/" element={<LoginPage />} />
-        <Route path="/groups" element={<StudyGroups />} />
-        <Route path="/match" element={<StudyBuddyMatch />} />
-
-        {/* Keep Home accessible at an explicit route if needed */}
-        <Route path="/home" element={<HomePage />} />
-
-        <Route path="/flashcards" element={<FlashcardsPage />} />
-        <Route path="/quizzes" element={<QuizzesPage />} />
-
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/login" element={<LoginPage />} />
 
-        <Route path="/user/account" element={<AccountPage />} />
-        <Route path="/user/account/edit" element={<EditAccountPage />} />
-        <Route path="/resources" element={<ResourcesPage />} />
+        {/* Protected — requires login; redirects to /login if not authed */}
+        <Route path="/home" element={<RequireAuth><HomePage /></RequireAuth>} />
+        <Route path="/groups" element={<RequireAuth><StudyGroups /></RequireAuth>} />
+        <Route path="/match" element={<RequireAuth><StudyBuddyMatch /></RequireAuth>} />
+        <Route path="/flashcards" element={<RequireAuth><FlashcardsPage /></RequireAuth>} />
+        <Route path="/quizzes" element={<RequireAuth><QuizzesPage /></RequireAuth>} />
+        <Route path="/user/account" element={<RequireAuth><AccountPage /></RequireAuth>} />
+        <Route path="/user/account/edit" element={<RequireAuth><EditAccountPage /></RequireAuth>} />
+        <Route path="/resources" element={<RequireAuth><ResourcesPage /></RequireAuth>} />
         
         {/* <Route
           path="/"
           element={<div style={{ padding: "1.5rem" }}>Home page placeholder</div>}
         /> */}
         {/* Add routes below */}
-      </Routes>
+        </Routes>
+      </div>
 
     </BrowserRouter>
   );

@@ -106,30 +106,74 @@ def create_flashcard_set_transaction(data):
 # QUIZ SUBMISSION (Keep existing)
 # ==========================================
 def submit_quiz_transaction(user_id, quiz_id, answers_dict):
+    """
+    Grade a quiz attempt and return per-question results so the frontend can
+    show the user which questions they got wrong and the correct answer.
+    """
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
     try:
         conn.start_transaction()
-        
+
+        cursor.execute(
+            "SELECT question_id, question_text, points FROM Question "
+            "WHERE quiz_id = %s ORDER BY question_id",
+            (quiz_id,),
+        )
+        questions = cursor.fetchall()
+
         score = 0
         max_score = 0
+        results = []
 
-        for qid, ans_id in answers_dict.items():
-            cursor.execute("SELECT points FROM Question WHERE question_id = %s", (qid,))
-            q = cursor.fetchone()
-            if q: max_score += q["points"]
+        for q in questions:
+            qid = q["question_id"]
+            points = q["points"] or 0
+            max_score += points
 
-            cursor.execute("SELECT is_correct FROM Answer WHERE answer_id = %s", (ans_id,))
-            a = cursor.fetchone()
-            if a and a["is_correct"] == 1: score += q["points"]
+            cursor.execute(
+                "SELECT answer_id, answer_text, is_correct FROM Answer "
+                "WHERE question_id = %s ORDER BY answer_id",
+                (qid,),
+            )
+            answers = cursor.fetchall()
 
-        sql = "INSERT INTO UserQuizAttempt (user_id, quiz_id, score, max_score) VALUES (%s, %s, %s, %s)"
-        cursor.execute(sql, (user_id, quiz_id, score, max_score))
+            correct_ans = next((a for a in answers if a["is_correct"] == 1), None)
+            selected_id = answers_dict.get(qid)
+            selected_ans = next(
+                (a for a in answers if a["answer_id"] == selected_id), None
+            ) if selected_id is not None else None
+
+            is_correct = bool(selected_ans and selected_ans["is_correct"] == 1)
+            if is_correct:
+                score += points
+
+            results.append({
+                "question_id": qid,
+                "question_text": q["question_text"],
+                "points": points,
+                "is_correct": is_correct,
+                "selected_answer_id": selected_ans["answer_id"] if selected_ans else None,
+                "selected_answer_text": selected_ans["answer_text"] if selected_ans else None,
+                "correct_answer_id": correct_ans["answer_id"] if correct_ans else None,
+                "correct_answer_text": correct_ans["answer_text"] if correct_ans else None,
+            })
+
+        cursor.execute(
+            "INSERT INTO UserQuizAttempt (user_id, quiz_id, score, max_score) "
+            "VALUES (%s, %s, %s, %s)",
+            (user_id, quiz_id, score, max_score),
+        )
         attempt_id = cursor.lastrowid
-        
+
         conn.commit()
-        return { "attempt_id": attempt_id, "score": score, "max_score": max_score }, None
+        return {
+            "attempt_id": attempt_id,
+            "score": score,
+            "max_score": max_score,
+            "results": results,
+        }, None
 
     except mysql.connector.Error as err:
         conn.rollback()
@@ -139,7 +183,26 @@ def submit_quiz_transaction(user_id, quiz_id, answers_dict):
         conn.close()
 
 
-def approve_ai_draft_transaction(conn, draft_set_id: int, creator_id: int):
+def approve_ai_draft_transaction(
+    conn,
+    draft_set_id: int,
+    creator_id: int,
+    kind: str = "both",
+):
+    """
+    Approve a drafted AI generation.
+
+    `kind`:
+      - "quiz"       → only create the quiz (skip flashcard set)
+      - "flashcards" → only create the flashcard set (skip quiz)
+      - "both"       → create both (legacy default)
+    """
+    if kind not in ("quiz", "flashcards", "both"):
+        raise ValueError("kind must be one of: quiz, flashcards, both")
+
+    do_cards = kind in ("flashcards", "both")
+    do_quiz  = kind in ("quiz", "both")
+
     cursor = conn.cursor(dictionary=True)
 
     try:
@@ -158,83 +221,89 @@ def approve_ai_draft_transaction(conn, draft_set_id: int, creator_id: int):
         if draft_set["status"] != "draft":
             raise ValueError("Draft set is not in draft status")
 
-        cursor.execute("""
-            SELECT draft_flashcard_id, front_text, back_text
-            FROM ai_draft_flashcard
-            WHERE draft_set_id = %s
-            ORDER BY draft_flashcard_id ASC
-        """, (draft_set_id,))
-        draft_flashcards = cursor.fetchall()
-
-        cursor.execute("""
-            INSERT INTO flashcardset (title, description, course_id, creator_id)
-            VALUES (%s, %s, %s, %s)
-        """, (
-            "AI Generated Flashcards",
-            "Approved from AI draft set",
-            draft_set["course_id"],
-            creator_id
-        ))
-        real_set_id = cursor.lastrowid
-
-        for card in draft_flashcards:
+        real_set_id = None
+        if do_cards:
             cursor.execute("""
-                INSERT INTO flashcard (set_id, front_text, back_text)
-                VALUES (%s, %s, %s)
-            """, (
-                real_set_id,
-                card["front_text"],
-                card["back_text"]
-            ))
+                SELECT draft_flashcard_id, front_text, back_text
+                FROM ai_draft_flashcard
+                WHERE draft_set_id = %s
+                ORDER BY draft_flashcard_id ASC
+            """, (draft_set_id,))
+            draft_flashcards = cursor.fetchall()
 
-        cursor.execute("""
-            SELECT draft_question_id, question_text, question_type, points
-            FROM ai_draft_question
-            WHERE draft_set_id = %s
-            ORDER BY draft_question_id ASC
-        """, (draft_set_id,))
-        draft_questions = cursor.fetchall()
-
-        cursor.execute("""
-            INSERT INTO quiz (title, description, course_id, creator_id)
-            VALUES (%s, %s, %s, %s)
-        """, (
-            "AI Generated Quiz",
-            "Approved from AI draft set",
-            draft_set["course_id"],
-            creator_id
-        ))
-        real_quiz_id = cursor.lastrowid
-
-        for q in draft_questions:
-            cursor.execute("""
-                INSERT INTO question (quiz_id, question_text, question_type, points)
-                VALUES (%s, %s, %s, %s)
-            """, (
-                real_quiz_id,
-                q["question_text"],
-                q["question_type"],
-                q["points"]
-            ))
-            real_question_id = cursor.lastrowid
-
-            cursor.execute("""
-                SELECT answer_text, is_correct
-                FROM ai_draft_answer
-                WHERE draft_question_id = %s
-                ORDER BY draft_answer_id ASC
-            """, (q["draft_question_id"],))
-            draft_answers = cursor.fetchall()
-
-            for a in draft_answers:
+            if draft_flashcards:
                 cursor.execute("""
-                    INSERT INTO answer (question_id, is_correct, answer_text)
-                    VALUES (%s, %s, %s)
+                    INSERT INTO flashcardset (title, description, course_id, creator_id)
+                    VALUES (%s, %s, %s, %s)
                 """, (
-                    real_question_id,
-                    a["is_correct"],
-                    a["answer_text"]
+                    "AI Generated Flashcards",
+                    "Approved from AI draft set",
+                    draft_set["course_id"],
+                    creator_id,
                 ))
+                real_set_id = cursor.lastrowid
+
+                for card in draft_flashcards:
+                    cursor.execute("""
+                        INSERT INTO flashcard (set_id, front_text, back_text)
+                        VALUES (%s, %s, %s)
+                    """, (
+                        real_set_id,
+                        card["front_text"],
+                        card["back_text"],
+                    ))
+
+        real_quiz_id = None
+        if do_quiz:
+            cursor.execute("""
+                SELECT draft_question_id, question_text, question_type, points
+                FROM ai_draft_question
+                WHERE draft_set_id = %s
+                ORDER BY draft_question_id ASC
+            """, (draft_set_id,))
+            draft_questions = cursor.fetchall()
+
+            if draft_questions:
+                cursor.execute("""
+                    INSERT INTO quiz (title, description, course_id, creator_id)
+                    VALUES (%s, %s, %s, %s)
+                """, (
+                    "AI Generated Quiz",
+                    "Approved from AI draft set",
+                    draft_set["course_id"],
+                    creator_id,
+                ))
+                real_quiz_id = cursor.lastrowid
+
+                for q in draft_questions:
+                    cursor.execute("""
+                        INSERT INTO question (quiz_id, question_text, question_type, points)
+                        VALUES (%s, %s, %s, %s)
+                    """, (
+                        real_quiz_id,
+                        q["question_text"],
+                        q["question_type"],
+                        q["points"],
+                    ))
+                    real_question_id = cursor.lastrowid
+
+                    cursor.execute("""
+                        SELECT answer_text, is_correct
+                        FROM ai_draft_answer
+                        WHERE draft_question_id = %s
+                        ORDER BY draft_answer_id ASC
+                    """, (q["draft_question_id"],))
+                    draft_answers = cursor.fetchall()
+
+                    for a in draft_answers:
+                        cursor.execute("""
+                            INSERT INTO answer (question_id, is_correct, answer_text)
+                            VALUES (%s, %s, %s)
+                        """, (
+                            real_question_id,
+                            a["is_correct"],
+                            a["answer_text"],
+                        ))
 
         cursor.execute("""
             UPDATE ai_draft_set
@@ -248,7 +317,8 @@ def approve_ai_draft_transaction(conn, draft_set_id: int, creator_id: int):
             "status": "ok",
             "draft_set_id": draft_set_id,
             "flashcard_set_id": real_set_id,
-            "quiz_id": real_quiz_id
+            "quiz_id": real_quiz_id,
+            "kind": kind,
         }
 
     except Exception:
@@ -276,7 +346,11 @@ def save_ai_draft_transaction(conn, user_id: int, course_id: int, raw_text: str,
         ))
         draft_set_id = cursor.lastrowid
 
-        flashcards = generated["draft"]["flashcard_set"]["items"]
+        draft = generated.get("draft") or {}
+        fc_block = draft.get("flashcard_set") or {}
+        qz_block = draft.get("quiz") or {}
+
+        flashcards = fc_block.get("items") or []
         for card in flashcards:
             cursor.execute("""
                 INSERT INTO ai_draft_flashcard (draft_set_id, front_text, back_text)
@@ -287,7 +361,7 @@ def save_ai_draft_transaction(conn, user_id: int, course_id: int, raw_text: str,
                 card["back"]
             ))
 
-        questions = generated["draft"]["quiz"]["questions"]
+        questions = qz_block.get("questions") or []
         for q in questions:
             cursor.execute("""
                 INSERT INTO ai_draft_question (draft_set_id, question_text, question_type, points)

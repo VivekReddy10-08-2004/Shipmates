@@ -1,35 +1,36 @@
-// src/pages/HomePage.jsx
+// src/pages/HomePage.tsx
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { TypeAnimation } from "react-type-animation";
+import { motion } from "framer-motion";
 
-import CardsIcon from "../assets/Cards.png";
-import LevelUpIcon from "../assets/levelup.png";
-import NetworkIcon from "../assets/Network.png";
-import MatcherIcon from "../assets/matcher.png";
-
+import TreasureMap from "../components/TreasureMap.js";
 import useCurrentUser from "../hooks/useCurrentUser.js";
-import { fetchMyGroups, fetchUpcomingSessions, type Session } from "../api/studygroups.js";
+import { formatSession as fmtSession } from "../utils/dateFormat.js";
+import {
+  fetchMyGroups,
+  fetchUpcomingSessions,
+  type Session,
+} from "../api/studygroups.js";
 
 export default function HomePage() {
   const navigate = useNavigate();
   const { user, loading: userLoading } = useCurrentUser();
-
   const userId = user?.user_id ?? null;
 
   const [activeGroups, setActiveGroups] = useState(0);
   const [nextSession, setNextSession] = useState<Session | null>(null);
   const [streakDays, setStreakDays] = useState(0);
 
-  // ---- simple streak tracker (per user, stored in localStorage) ----
+  // ---- streak tracker (per user, localStorage) ----
   useEffect(() => {
     if (!userId) {
       setStreakDays(0);
       return;
     }
-
     try {
       const today = new Date();
-      const todayStr = today.toISOString().slice(0, 10); // YYYY-MM-DD
+      const todayStr = today.toISOString().slice(0, 10);
       const key = `sb_streak_${userId}`;
       const raw = window.localStorage.getItem(key);
 
@@ -42,22 +43,13 @@ export default function HomePage() {
         const prevCount = parsed.count || 1;
 
         if (lastDate === todayStr) {
-          // already counted today; keep existing streak
           newCount = prevCount;
         } else {
           const last = new Date(lastDate);
-          const diffMs = today.getTime() - last.getTime(); // needed to add getTime() - Rise
+          const diffMs = today.getTime() - last.getTime();
           const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-          if (diffDays === 1) {
-            // consecutive day
-            newCount = prevCount + 1;
-          } else {
-            // gap -> reset streak
-            newCount = 1;
-          }
+          newCount = diffDays === 1 ? prevCount + 1 : 1;
         }
-
         payload = { lastDate: todayStr, count: newCount };
       }
 
@@ -68,84 +60,52 @@ export default function HomePage() {
     }
   }, [userId]);
 
-  // ---- load active groups + next upcoming session ----
+  // ---- load groups + next session ----
   useEffect(() => {
     if (!userId) {
       setActiveGroups(0);
       setNextSession(null);
       return;
     }
-
     async function loadDashboard() {
       try {
         const [myGroups, sessions] = await Promise.all([
           fetchMyGroups(userId!),
-          // limit = 1 so we just pick the next one
           fetchUpcomingSessions(userId, 1),
         ]);
-
         setActiveGroups(Array.isArray(myGroups) ? myGroups.length : 0);
         const s: Session | null =
-          Array.isArray(sessions) && sessions.length > 0 ? sessions[0]! : null;
+          Array.isArray(sessions) && sessions.length > 0
+            ? sessions[0]!
+            : null;
         setNextSession(s);
       } catch (err) {
         console.error("Failed to load dashboard stats", err);
       }
     }
-
     loadDashboard();
   }, [userId]);
 
   const streakLabel =
-    streakDays > 0 ? `${streakDays} day${streakDays === 1 ? "" : "s"}` : "0 days";
+    streakDays > 0
+      ? `${streakDays} day${streakDays === 1 ? "" : "s"}`
+      : "0 days";
 
-  const activeGroupsLabel =
-    userLoading || !userId ? "--" : String(activeGroups);
-
-  const hasSession = !!nextSession;
-
-  const sessionTitle = hasSession
-    ? nextSession.group_name || "Study session"
-    : "No upcoming study sessions";
-
-  // Helper so we never show undefined and format like 12/9 · 7:58–8:58
-  const formatSessionTime = (session) => {
-    if (!session) {
-      return "Use Study Groups to schedule your next session.";
-    }
-
-    const { session_date, start_time, end_time } = session;
-
-    // Format date as MM/DD (or local format)
-    let dateLabel = session_date;
-    if (session_date) {
-      const [y, m, d] = session_date.split("-").map(Number);
-      const dt = new Date(y, m - 1, d);
-      dateLabel = dt.toLocaleDateString(undefined, {
-        month: "numeric",
-        day: "numeric",
-      });
-    }
-
-    const start = start_time?.slice(0, 5);
-    const end = end_time?.slice(0, 5);
-
-    let timePart = "";
-    if (start && end) timePart = `${start}–${end}`;
-    else if (start) timePart = start;
-
-    return timePart ? `${dateLabel} · ${timePart}` : dateLabel;
+  const formatSession = (session: any) => {
+    if (!session) return { title: "No upcoming sessions", time: "" };
+    const name = session.group_name || "Study session";
+    const time = fmtSession({
+      date: session.session_date,
+      start_time: session.start_time,
+      end_time: session.end_time,
+    });
+    return { title: name, time };
   };
 
-  const sessionTime = hasSession
-    ? formatSessionTime(nextSession)
-    : "Use Study Groups to schedule your next session.";
-
-  const sessionLocation = hasSession
-    ? nextSession.location || "Location TBD"
-    : "Search for or create a study group!";
+  const sessionInfo = formatSession(nextSession);
 
   return (
+<<<<<<< HEAD
     <div className="app-shell home-page">
       {/* floating background spheres */}
       <div className="home-floating-shapes" aria-hidden="true">
@@ -260,64 +220,70 @@ export default function HomePage() {
             quizzes or flashcards, use our study tools, find or create a study
             group, or find the perfect sutdy partner on Shipmates Match!
           </p>
+=======
+    <div className="home-new">
+      {/* Hero */}
+      <motion.section
+        className="home-hero"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6 }}
+      >
+        <h1 className="home-hero-title">Shipmates</h1>
+        <div className="home-hero-subtitle">
+          <TypeAnimation
+            sequence={[
+              "Find your crew.",
+              2000,
+              "Chart your course.",
+              2000,
+              "Set sail.",
+              2000,
+              "Conquer the seas of knowledge.",
+              2500,
+            ]}
+            repeat={Infinity}
+            speed={40}
+            style={{ display: "inline-block" }}
+          />
+>>>>>>> ed7381045efd822ddca9b9363bc01a31b568ef21
         </div>
+      </motion.section>
 
-        <div className="feature-grid">
-          {/* Quizzes & Flashcards */}
-          <section
-            className="card feature-card feature-card-gamified"
-            style={{ minHeight: "260px" }}
-          >
-            <div className="feature-card-header">
-              <div className="feature-card-title-row">
-                <div className="feature-card-icon-placeholder">
-                  <img src={CardsIcon} alt="Quizzes & Flashcards logo" />
-                </div>
-                <div className="card-title">Quizzes &amp; Flashcards</div>
-              </div>
-            </div>
+      {/* Treasure Map */}
+      <TreasureMap />
 
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.5rem",
-                marginTop: "1rem",
-              }}
-            >
-              <button
-                className="btn btn-primary feature-card-btn"
-                type="button"
-                onClick={() => navigate("/quizzes")}
-              >
-                Quizzes
-              </button>
-              <button
-                className="btn btn-primary feature-card-btn"
-                type="button"
-                onClick={() => navigate("/flashcards")}
-              >
-                Flashcards
-              </button>
-            </div>
-          </section>
+      {/* Stats */}
+      <div className="home-stats">
+        <motion.div
+          className="home-stat"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 1.0, duration: 0.4 }}
+        >
+          <span className="home-stat-icon">🔥</span>
+          <div className="home-stat-info">
+            <span className="home-stat-label">Voyage Streak</span>
+            <span className="home-stat-value">{streakLabel}</span>
+          </div>
+        </motion.div>
 
-          {/* Study Management & Focus */}
-          <section
-            className="card feature-card feature-card-gamified"
-            style={{ minHeight: "260px" }}
-          >
-            <div className="feature-card-header">
-              <div className="feature-card-title-row">
-                <div className="feature-card-icon-placeholder">
-                  <img src={LevelUpIcon} alt="Study Management logo" />
-                </div>
-                <div className="card-title">
-                  Study Management &amp; Focus
-                </div>
-              </div>
-            </div>
+        <motion.div
+          className="home-stat"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 1.2, duration: 0.4 }}
+        >
+          <span className="home-stat-icon">⚓</span>
+          <div className="home-stat-info">
+            <span className="home-stat-label">Active Crews</span>
+            <span className="home-stat-value">
+              {userLoading || !userId ? "--" : String(activeGroups)}
+            </span>
+          </div>
+        </motion.div>
 
+<<<<<<< HEAD
             {/* keep card size but no description/list */}
             <div
               style={{
@@ -404,6 +370,24 @@ export default function HomePage() {
           </section>
         </div>
       </section>
+=======
+        <motion.div
+          className="home-stat"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 1.4, duration: 0.4 }}
+        >
+          <span className="home-stat-icon">🧭</span>
+          <div className="home-stat-info">
+            <span className="home-stat-label">Next Session</span>
+            <span className="home-stat-value">{sessionInfo.title}</span>
+            {sessionInfo.time && (
+              <span className="home-stat-time">{sessionInfo.time}</span>
+            )}
+          </div>
+        </motion.div>
+      </div>
+>>>>>>> ed7381045efd822ddca9b9363bc01a31b568ef21
     </div>
   );
 }

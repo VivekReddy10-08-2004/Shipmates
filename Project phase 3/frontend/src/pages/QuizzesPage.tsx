@@ -1,9 +1,10 @@
-import React, { useState } from "react";
-import CreateQuiz from "../components/Quizzes/CreateQuiz.js";
+import { useEffect, useState } from "react";
 import TakeQuiz from "../components/Quizzes/TakeQuiz.js";
+import CreateQuiz from "../components/Quizzes/CreateQuiz.js";
 import { generateFromNotes, approveGeneratedDraft } from "../api/generate.js";
 import { searchCourses } from "../api/studygroups.js";
 import useCurrentUser from "../hooks/useCurrentUser.js";
+import { fireReload } from "../utils/reloadEvents.js";
 
 export default function QuizzesPage() {
   const { user } = useCurrentUser();
@@ -21,21 +22,41 @@ export default function QuizzesPage() {
   const [generateError, setGenerateError] = useState("");
   const [approveLoading, setApproveLoading] = useState(false);
   const [approveError, setApproveError] = useState("");
-  const [approveSuccess, setApproveSuccess] = useState("");
+  const [showToast, setShowToast] = useState(false);
+
+  const [showCreateModal, setShowCreateModal] = useState(false);
+
+  useEffect(() => {
+    if (!showToast) return;
+    const t = setTimeout(() => setShowToast(false), 1700);
+    return () => clearTimeout(t);
+  }, [showToast]);
+
+  useEffect(() => {
+    if (showCreateModal) document.body.classList.add("study-scroll-lock");
+    else document.body.classList.remove("study-scroll-lock");
+    return () => document.body.classList.remove("study-scroll-lock");
+  }, [showCreateModal]);
+
+  useEffect(() => {
+    if (!showCreateModal) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowCreateModal(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showCreateModal]);
 
   const handleCourseSearch = async (value: string) => {
     setCourseQuery(value);
-
     if (value.trim().length < 2) {
       setCourseResults([]);
       return;
     }
-
     try {
       const results = await searchCourses(value, 8);
       setCourseResults(results || []);
-    } catch (err) {
-      console.error("Failed to search courses:", err);
+    } catch {
       setCourseResults([]);
     }
   };
@@ -45,7 +66,6 @@ export default function QuizzesPage() {
     const label = course.course_code
       ? `${course.course_code} - ${course.course_name}`
       : course.course_name;
-
     setSelectedCourseName(label);
     setCourseQuery(label);
     setCourseResults([]);
@@ -57,24 +77,19 @@ export default function QuizzesPage() {
     setGeneratedQuestions([]);
     setGeneratedDraftSetId(null);
     setApproveError("");
-    setApproveSuccess("");
 
     try {
-      if (!user?.user_id) {
-        throw new Error("No logged-in user found");
-      }
-
-      if (!generateCourseId) {
-        throw new Error("Please select a course");
-      }
+      if (!user?.user_id) throw new Error("No logged-in user found");
+      if (!generateCourseId) throw new Error("Please select a course");
 
       const data = await generateFromNotes({
         user_id: Number(user.user_id),
         course_id: Number(generateCourseId),
         raw_text: generateNotes,
+        kind: "quiz",
       });
 
-      setGeneratedQuestions(data.draft.quiz.questions || []);
+      setGeneratedQuestions(data.draft.quiz?.questions || []);
       setGeneratedDraftSetId(data.draft_set_id ?? null);
     } catch (err: any) {
       setGenerateError(err.message || "Failed to generate quiz");
@@ -86,23 +101,22 @@ export default function QuizzesPage() {
   const handleApproveGeneratedQuiz = async () => {
     setApproveLoading(true);
     setApproveError("");
-    setApproveSuccess("");
 
     try {
-      if (!user?.user_id) {
-        throw new Error("No logged-in user found");
-      }
+      if (!user?.user_id) throw new Error("No logged-in user found");
+      if (!generatedDraftSetId) throw new Error("No draft set to approve");
 
-      if (!generatedDraftSetId) {
-        throw new Error("No draft set to approve");
-      }
-
-      const result = await approveGeneratedDraft({
+      await approveGeneratedDraft({
         draft_set_id: generatedDraftSetId,
         creator_id: Number(user.user_id),
+        kind: "quiz",
       });
 
-      setApproveSuccess(`Approved successfully. Quiz ID: ${result.quiz_id}`);
+      fireReload("quizzes");
+      setGeneratedDraftSetId(null);
+      setGeneratedQuestions([]);
+      setGenerateNotes("");
+      setShowToast(true);
     } catch (err: any) {
       setApproveError(err.message || "Failed to approve generated quiz");
     } finally {
@@ -111,55 +125,32 @@ export default function QuizzesPage() {
   };
 
   return (
-    <div style={{ padding: 20 }}>
-      <h1>Quizzes</h1>
+    <div className="crews-page">
+      <div className="crews-bg-layer" />
 
-      <div
-        style={{
-          marginBottom: "24px",
-          padding: "16px",
-          background: "#fff",
-          borderRadius: "12px"
-        }}
-      >
-        <h2>Generate Quiz from Notes</h2>
+      <div className="crews-hero">
+        <span className="crews-hero-ropes" aria-hidden />
+        <h1 className="crews-hero-title">Quizzes</h1>
+      </div>
 
-        <div style={{ marginBottom: "12px", position: "relative" }}>
-          <label>Course</label>
-          <br />
+      <div className="crews-panel" style={{ marginBottom: "1.75rem" }}>
+        <h2 className="crews-panel-title">Forge a Quiz from Notes</h2>
+
+        <div className={`study-field ${courseResults.length > 0 ? "has-dropdown" : ""}`}>
+          <label className="study-label">Course</label>
           <input
+            className="study-input"
             value={courseQuery}
             onChange={(e) => handleCourseSearch(e.target.value)}
-            placeholder="Search courses"
+            placeholder="Search courses..."
           />
-
-          {selectedCourseName && (
-            <p style={{ marginTop: "8px" }}>
-              Selected: {selectedCourseName}
-            </p>
-          )}
-
           {courseResults.length > 0 && (
-            <div
-              style={{
-                marginTop: "8px",
-                border: "1px solid #ccc",
-                borderRadius: "8px",
-                padding: "8px",
-                background: "#fff",
-                maxHeight: "200px",
-                overflowY: "auto"
-              }}
-            >
+            <div className="study-search-results">
               {courseResults.map((course) => (
                 <div
                   key={course.course_id}
+                  className="study-search-item"
                   onClick={() => handleSelectCourse(course)}
-                  style={{
-                    padding: "8px",
-                    cursor: "pointer",
-                    borderBottom: "1px solid #eee"
-                  }}
                 >
                   {course.course_code
                     ? `${course.course_code} - ${course.course_name}`
@@ -168,96 +159,98 @@ export default function QuizzesPage() {
               ))}
             </div>
           )}
+          {selectedCourseName && !courseResults.length && (
+            <span className="study-selected-chip">⚓ {selectedCourseName}</span>
+          )}
         </div>
 
-        <div style={{ marginBottom: "12px" }}>
-          <label>Notes</label>
-          <br />
+        <div className="study-field">
+          <label className="study-label">Notes</label>
           <textarea
+            className="study-textarea"
             value={generateNotes}
             onChange={(e) => setGenerateNotes(e.target.value)}
-            rows={8}
-            cols={70}
+            placeholder="Paste your lecture notes, textbook passage, or study material here..."
           />
         </div>
 
-        <button onClick={handleGenerateQuiz} disabled={generateLoading}>
-          {generateLoading ? "Generating..." : "Generate Quiz"}
+        <button
+          className="btn-treasure"
+          onClick={handleGenerateQuiz}
+          disabled={generateLoading}
+        >
+          {generateLoading ? "Charting..." : "Generate Quiz"}
         </button>
 
-        {generateError && (
-          <p style={{ color: "red", marginTop: "12px" }}>{generateError}</p>
-        )}
-
-        {generatedDraftSetId && (
-          <p style={{ marginTop: "12px" }}>
-            Draft Set ID: {generatedDraftSetId}
-          </p>
-        )}
-
-        {generatedDraftSetId && (
-          <button
-            onClick={handleApproveGeneratedQuiz}
-            disabled={approveLoading}
-            style={{ marginTop: "12px", display: "block" }}
-          >
-            {approveLoading ? "Approving..." : "Approve Generated Quiz"}
-          </button>
-        )}
-
-        {approveError && (
-          <p style={{ color: "red", marginTop: "12px" }}>{approveError}</p>
-        )}
-
-        {approveSuccess && (
-          <p style={{ color: "green", marginTop: "12px" }}>{approveSuccess}</p>
-        )}
+        {generateError && <div className="study-notice study-notice-error">{generateError}</div>}
+        {approveError && <div className="study-notice study-notice-error">{approveError}</div>}
 
         {generatedQuestions.length > 0 && (
-          <div style={{ marginTop: "16px" }}>
-            <h3>Generated Quiz Preview</h3>
-
+          <>
+            <div className="study-preview-header">Generated Quiz Preview</div>
             {generatedQuestions.map((question, index) => (
-              <div
-                key={index}
-                style={{
-                  marginBottom: "16px",
-                  padding: "12px",
-                  border: "1px solid #ccc",
-                  borderRadius: "8px"
-                }}
-              >
-                <p>
-                  <strong>Question:</strong> {question.question_text}
-                </p>
-                <p>
-                  <strong>Type:</strong> {question.question_type}
-                </p>
-                <p>
-                  <strong>Points:</strong> {question.points}
-                </p>
-
-                <div style={{ marginTop: "8px" }}>
-                  {question.answers.map((answer: any, answerIndex: number) => (
-                    <div key={answerIndex}>
-                      - {answer.answer_text} {answer.is_correct ? "(correct)" : ""}
+              <div key={index} className="study-preview-card">
+                <p><strong>Q{index + 1}</strong>{question.question_text}</p>
+                <div style={{ marginTop: "0.4rem" }}>
+                  {(question.answers || []).map((answer: any, aIdx: number) => (
+                    <div
+                      key={aIdx}
+                      className={`answer-line ${answer.is_correct ? "answer-correct" : ""}`}
+                    >
+                      {answer.is_correct ? "✓ " : "• "}{answer.answer_text}
                     </div>
                   ))}
                 </div>
               </div>
             ))}
-          </div>
+            <button
+              className="btn-treasure"
+              onClick={handleApproveGeneratedQuiz}
+              disabled={approveLoading}
+              style={{ marginTop: "0.5rem" }}
+            >
+              {approveLoading ? "Adding to logbook..." : "Approve & Save Quiz"}
+            </button>
+          </>
         )}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        <div>
-          <CreateQuiz />
+      <div className="crews-panel">
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap" }}>
+          <h2 className="crews-panel-title" style={{ flex: 1, minWidth: 0 }}>Your Quizzes</h2>
+          <button
+            className="btn-wood"
+            onClick={() => setShowCreateModal(true)}
+            style={{ marginTop: "-0.2rem" }}
+          >
+            + Create Manually
+          </button>
         </div>
-        <div>
-          <TakeQuiz />
-        </div>
+        <TakeQuiz />
       </div>
+
+      {showCreateModal && (
+        <div className="study-fullmodal-backdrop" onClick={() => setShowCreateModal(false)}>
+          <div className="study-fullmodal" onClick={(e) => e.stopPropagation()}>
+            <button
+              className="study-fullmodal-close"
+              onClick={() => setShowCreateModal(false)}
+              aria-label="Close"
+            >
+              ×
+            </button>
+            <CreateQuiz
+              onClose={() => setShowCreateModal(false)}
+              onCreated={() => {
+                setShowCreateModal(false);
+                setShowToast(true);
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {showToast && <div className="study-toast">Generated successfully</div>}
     </div>
   );
 }
