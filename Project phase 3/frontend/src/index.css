@@ -9,17 +9,10 @@
   --accent-soft: rgba(26, 138, 125, 0.15);
   --highlight: #d4a843;
   --highlight-soft: #f3e9d6;
-<<<<<<< HEAD
-  --danger: #8a3a3a;
-  --success: #2f5f82;
-  --border: #ffb348;
-  --text-main: #525281;
-=======
   --danger: #c0392b;
   --success: #1a8a7d;
   --border: rgba(212, 168, 67, 0.3);
   --text-main: #e2e8f0;
->>>>>>> ed7381045efd822ddca9b9363bc01a31b568ef21
   --text-main-alt: #f8fcff;
   --text-muted: #7b93ad;
   --text-title: #f8fcff;
@@ -848,15 +841,6 @@ ul.clean-list {
   transform-origin: bottom center;
 }
 
-<<<<<<< HEAD
-.nav-logo-img {
-  width: 48px;
-  height: 48px;
-}
-
-
-.nav-title {
-=======
 .crews-hero-title {
   font-family: var(--font-heading);
   font-size: clamp(2rem, 4vw, 3rem);
@@ -915,7 +899,6 @@ ul.clean-list {
 .crews-panel-title {
   font-family: var(--font-heading);
   font-size: 1.25rem;
->>>>>>> ed7381045efd822ddca9b9363bc01a31b568ef21
   font-weight: 700;
   color: var(--gold);
   letter-spacing: 0.05em;

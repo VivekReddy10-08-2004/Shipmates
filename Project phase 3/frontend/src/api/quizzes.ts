@@ -29,11 +29,6 @@ export interface Answer {
   answer_text: string;
 }
 
-<<<<<<< HEAD
-export interface Score {
-  score: number;
-  max_score: number;
-=======
 export interface QuestionResult {
   question_id: number;
   question_text: string;
@@ -50,7 +45,6 @@ export interface Score {
   max_score: number;
   attempt_id?: number;
   results?: QuestionResult[];
->>>>>>> ed7381045efd822ddca9b9363bc01a31b568ef21
 }
 
 export const listQuizzes = async (page = 1, limit = 20, creatorId?: number) => {

@@ -31,8 +31,6 @@ const navItems: NavItem[] = [
   { to: "/user/account", label: "Account", Icon: GiPirateHat, end: true },
 ];
 
-import ShipmatesLogo from "../assets/shipmates_logo.png";
-
 export default function NavBar() {
   const [hidden, setHidden] = useState<boolean>(() => {
     try {
@@ -53,14 +51,6 @@ export default function NavBar() {
   }, [hidden]);
 
   return (
-<<<<<<< HEAD
-    <header className="navbar">
-      <div className="nav-left">
-        {/* <span className="nav-logo-dot" /> */}
-        <img className="nav-logo-img" src={ShipmatesLogo} alt="Shipmates logo"/>
-        <span className="nav-title">Shipmates</span>
-      </div>
-=======
     <>
       {/* Tiny toggle tab that stays visible when sidebar is hidden */}
       <AnimatePresence>
@@ -79,7 +69,6 @@ export default function NavBar() {
           </motion.button>
         )}
       </AnimatePresence>
->>>>>>> ed7381045efd822ddca9b9363bc01a31b568ef21
 
       {/* Side rail */}
       <AnimatePresence>
@@ -121,48 +110,6 @@ export default function NavBar() {
               ))}
             </nav>
 
-<<<<<<< HEAD
-        <NavLink
-          to="/quizzes"
-          className={({ isActive }) =>
-            "nav-link" + (isActive ? " nav-link-active" : "")
-          }
-        >
-          Quizzes
-        </NavLink>
-
-        <NavLink
-          to="/match"
-          className={({ isActive }) =>
-            "nav-link" + (isActive ? " nav-link-active" : "")
-          }
-        >
-          Shipmates Match
-        </NavLink>
-
-        <NavLink
-          to="/flashcards"
-          className={({ isActive }) =>
-            "nav-link" + (isActive ? " nav-link-active" : "")
-          }
-        >
-          Flashcards
-        </NavLink>
-
-
-        <NavLink
-          to="/user/account"
-          className={({ isActive }) =>
-            "nav-link" + (isActive ? " nav-link-active" : "")
-          }
-          end
-        >
-          Account
-        </NavLink>
-
-      </nav>
-    </header>
-=======
             {/* Hide button at bottom */}
             <button
               type="button"
@@ -177,6 +124,5 @@ export default function NavBar() {
         )}
       </AnimatePresence>
     </>
->>>>>>> ed7381045efd822ddca9b9363bc01a31b568ef21
   );
 }
