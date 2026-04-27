@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createQuiz } from "../../api/quizzes.js";
 import useCurrentUser from "../../hooks/useCurrentUser.js";
-import { searchCourses } from "../../api/studygroups.js";
+import { ensureCourse, searchCourses } from "../../api/studygroups.js";
 import { fireReload } from "../../utils/reloadEvents.js";
 
 type AnswerInput = { answer_text: string; is_correct: boolean };
@@ -43,6 +43,13 @@ export default function CreateQuiz({ onClose, onCreated }: Props) {
     setSelectedCourseName(label);
     setCourseQuery(label);
     setCourseResults([]);
+  };
+
+  const ensureCourseFromTypedText = async () => {
+    const typed = courseQuery.trim();
+    if (!typed) return;
+    const course = await ensureCourse(typed);
+    pickCourse(course);
   };
 
   const setQText = (qi: number, v: string) =>
@@ -134,7 +141,22 @@ export default function CreateQuiz({ onClose, onCreated }: Props) {
 
       <div className="study-field">
         <label className="study-label">Course</label>
-        <input className="study-input" value={courseQuery} onChange={(e) => handleCourseSearch(e.target.value)} placeholder="Search courses..." />
+        <input
+          className="study-input"
+          value={courseQuery}
+          onChange={(e) => handleCourseSearch(e.target.value)}
+          onKeyDown={async (e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              try {
+                await ensureCourseFromTypedText();
+              } catch (err: any) {
+                setStatus({ kind: "error", text: err?.message || "Failed to create/select course" });
+              }
+            }
+          }}
+          placeholder="Search courses..."
+        />
         {courseResults.length > 0 && (
           <div className="study-search-results">
             {courseResults.map((c) => (
@@ -147,6 +169,9 @@ export default function CreateQuiz({ onClose, onCreated }: Props) {
         {selectedCourseName && !courseResults.length && (
           <span className="study-selected-chip">⚓ {selectedCourseName}</span>
         )}
+        <div style={{ fontSize: "0.78rem", opacity: 0.75, marginTop: "0.3rem" }}>
+          Tip: Press Enter to use typed text as a new course.
+        </div>
       </div>
 
       <div className="study-preview-header">Questions</div>

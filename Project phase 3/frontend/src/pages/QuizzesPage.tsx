@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import TakeQuiz from "../components/Quizzes/TakeQuiz.js";
 import CreateQuiz from "../components/Quizzes/CreateQuiz.js";
 import { generateFromNotes, approveGeneratedDraft } from "../api/generate.js";
-import { searchCourses } from "../api/studygroups.js";
+import { ensureCourse, searchCourses } from "../api/studygroups.js";
 import useCurrentUser from "../hooks/useCurrentUser.js";
 import { fireReload } from "../utils/reloadEvents.js";
 
@@ -15,6 +15,7 @@ export default function QuizzesPage() {
   const [selectedCourseName, setSelectedCourseName] = useState("");
 
   const [generateNotes, setGenerateNotes] = useState("");
+  const [generatePdfFile, setGeneratePdfFile] = useState<File | null>(null);
   const [generatedQuestions, setGeneratedQuestions] = useState<any[]>([]);
   const [generatedDraftSetId, setGeneratedDraftSetId] = useState<number | null>(null);
 
@@ -71,6 +72,13 @@ export default function QuizzesPage() {
     setCourseResults([]);
   };
 
+  const ensureCourseFromTypedText = async () => {
+    const typed = courseQuery.trim();
+    if (!typed) return;
+    const course = await ensureCourse(typed);
+    handleSelectCourse(course);
+  };
+
   const handleGenerateQuiz = async () => {
     setGenerateLoading(true);
     setGenerateError("");
@@ -80,13 +88,13 @@ export default function QuizzesPage() {
 
     try {
       if (!user?.user_id) throw new Error("No logged-in user found");
-      if (!generateCourseId) throw new Error("Please select a course");
 
       const data = await generateFromNotes({
         user_id: Number(user.user_id),
-        course_id: Number(generateCourseId),
+        course_id: generateCourseId ? Number(generateCourseId) : undefined,
         raw_text: generateNotes,
         kind: "quiz",
+        pdf_file: generatePdfFile,
       });
 
       setGeneratedQuestions(data.draft.quiz?.questions || []);
@@ -116,6 +124,7 @@ export default function QuizzesPage() {
       setGeneratedDraftSetId(null);
       setGeneratedQuestions([]);
       setGenerateNotes("");
+      setGeneratePdfFile(null);
       setShowToast(true);
     } catch (err: any) {
       setApproveError(err.message || "Failed to approve generated quiz");
@@ -142,6 +151,16 @@ export default function QuizzesPage() {
             className="study-input"
             value={courseQuery}
             onChange={(e) => handleCourseSearch(e.target.value)}
+            onKeyDown={async (e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                try {
+                  await ensureCourseFromTypedText();
+                } catch (err: any) {
+                  setGenerateError(err.message || "Failed to create/select course");
+                }
+              }
+            }}
             placeholder="Search courses..."
           />
           {courseResults.length > 0 && (
@@ -162,6 +181,9 @@ export default function QuizzesPage() {
           {selectedCourseName && !courseResults.length && (
             <span className="study-selected-chip">⚓ {selectedCourseName}</span>
           )}
+          <div style={{ fontSize: "0.78rem", opacity: 0.75, marginTop: "0.3rem" }}>
+            Tip: Press Enter to use typed text as a new course.
+          </div>
         </div>
 
         <div className="study-field">
@@ -172,6 +194,19 @@ export default function QuizzesPage() {
             onChange={(e) => setGenerateNotes(e.target.value)}
             placeholder="Paste your lecture notes, textbook passage, or study material here..."
           />
+        </div>
+
+        <div className="study-field">
+          <label className="study-label">PDF Notes (optional)</label>
+          <input
+            type="file"
+            accept="application/pdf,.pdf"
+            className="study-input"
+            onChange={(e) => setGeneratePdfFile(e.target.files?.[0] ?? null)}
+          />
+          {generatePdfFile && (
+            <span className="study-selected-chip">⚓ {generatePdfFile.name}</span>
+          )}
         </div>
 
         <button
@@ -206,11 +241,16 @@ export default function QuizzesPage() {
             <button
               className="btn-treasure"
               onClick={handleApproveGeneratedQuiz}
-              disabled={approveLoading}
+              disabled={approveLoading || !generatedDraftSetId}
               style={{ marginTop: "0.5rem" }}
             >
               {approveLoading ? "Adding to logbook..." : "Approve & Save Quiz"}
             </button>
+            {!generatedDraftSetId && (
+              <div className="study-notice" style={{ marginTop: "0.45rem" }}>
+                Add a course to save this generated quiz.
+              </div>
+            )}
           </>
         )}
       </div>

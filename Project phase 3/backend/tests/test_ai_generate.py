@@ -7,7 +7,7 @@ import sys
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from services.ai_generate import generate_study_drafts
+from services.ai_generate import extract_text_from_pdf_bytes, generate_study_drafts
 
 
 SAMPLE_NOTES = """
@@ -145,6 +145,28 @@ def test_different_notes_produce_different_output():
         a_backs = {c["back"].lower() for c in cards_a}
         b_backs = {c["back"].lower() for c in cards_b}
         assert a_backs != b_backs, "Different notes produced identical output"
+
+
+def test_extract_text_from_pdf_bytes_joins_pages(monkeypatch):
+    """PDF extraction should join page text and strip empty pages."""
+    class FakePage:
+        def __init__(self, text):
+            self._text = text
+
+        def extract_text(self):
+            return self._text
+
+    class FakeReader:
+        def __init__(self, _stream):
+            self.pages = [FakePage("Binary search overview"), FakePage("  "), FakePage("Time complexity")]
+
+    fake_pypdf = MagicMock()
+    fake_pypdf.PdfReader = FakeReader
+
+    with patch.dict(sys.modules, {"pypdf": fake_pypdf}):
+        text = extract_text_from_pdf_bytes(b"%PDF-1.4 fake")
+
+    assert text == "Binary search overview\n\nTime complexity"
 
 
 # ── OpenAI path tests (all use mocks — no real API calls) ─────────────────

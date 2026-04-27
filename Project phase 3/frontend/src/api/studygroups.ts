@@ -357,3 +357,11 @@ export async function searchCourses(query: any, limit = 8) {
   const data = await apiFetch(`/courses/search?${params.toString()}`); // had to change to await instead of return, because it didn't like me trying to apply a string to the type of Course[]- Rise
   return data as unknown as Course[];
 }
+
+export async function ensureCourse(text: string) {
+  const data = await apiFetch("/courses/ensure", {
+    method: "POST",
+    body: JSON.stringify({ text }),
+  });
+  return data as unknown as Course & { created: boolean };
+}
