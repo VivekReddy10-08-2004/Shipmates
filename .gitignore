@@ -1,24 +1,71 @@
-Project phase 3/backend/.venv/
+# Virtual environments
+.venv/
+.conda/
+venv/
+ENV/
+backend/.venv/
+
+# Python caching & bytecode
 **/__pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+
+# Environment files
 .env
+.env.*
+!.env.example
+
+# Frontend dependencies and builds
 node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+.vite/
+frontend/.vite/
 
-# User-uploaded files (profile pictures, resource uploads) — do not commit
-Project phase 3/backend/uploads/
-
-# Vite build output
-Project phase 3/frontend/dist/
-
-# Vite dev cache
-**/.vite/
-
-# Pytest cache
+# Testing & caches
 .pytest_cache/
+.eslintcache
+
+# User-uploaded content (dynamic files)
+backend/uploads/
+
+# Planning Phase 1 files (ignored per client instructions)
+Project phase 1/
+Documentations-personal/
+
+# Markdown files (documentation ignored for clients, except root README.md)
+*.md
+**/*.md
+!/README.md
+
+# Root directory image files (ignored for clients)
+/*.png
+/*.jpg
+/*.jpeg
+/*.gif
+/*.svg
+/*.bmp
+
+# Non-essential development and scrapers files (ignored for clients)
+*.ipynb
+**/*.ipynb
+*.pdf
+**/*.pdf
+*.zip
+**/*.zip
+*.txt
+**/*.txt
+Shipmates-direction-2026
 
 # OS / editor cruft
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
 
