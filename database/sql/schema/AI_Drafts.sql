@@ -10,9 +10,9 @@ CREATE TABLE IF NOT EXISTS ai_draft_set (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_ai_draft_set_user
-        FOREIGN KEY (user_id) REFERENCES users(user_id),
+        FOREIGN KEY (user_id) REFERENCES Users(user_id),
     CONSTRAINT fk_ai_draft_set_course
-        FOREIGN KEY (course_id) REFERENCES courses(course_id)
+        FOREIGN KEY (course_id) REFERENCES Courses(course_id)
 );
 
 CREATE TABLE IF NOT EXISTS ai_draft_flashcard (

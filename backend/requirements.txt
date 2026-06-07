@@ -1,0 +1,11 @@
+FastAPI
+uvicorn[standard]
+mysql-connector-python
+requests
+python-dotenv
+bcrypt
+python-multipart
+email-validator
+itsdangerous
+openai>=1.0.0
+pypdf>=5.0.0

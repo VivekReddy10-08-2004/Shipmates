@@ -56,6 +56,8 @@ Documentations-personal/
 **/*.zip
 *.txt
 **/*.txt
+!requirements.txt
+!**/requirements.txt
 Shipmates-direction-2026
 
 # OS / editor cruft
