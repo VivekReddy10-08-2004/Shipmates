@@ -144,7 +144,7 @@ export default function NavBar() {
             <h2 style={{ fontFamily: "var(--font-heading)", color: "var(--gold)", textAlign: "center", borderBottom: "1px solid var(--border)", paddingBottom: "10px" }}>
               ⚔️ About Shipmates ⚔️
             </h2>
-            <div style={{ padding: "10px 0", lineHeight: "1.6", color: "var(--text-main)" }}>
+            <div className="modal-body-scroll" style={{ padding: "10px 0", lineHeight: "1.6", color: "var(--text-main)", maxHeight: "300px" }}>
               <p style={{ fontStyle: "italic", textAlign: "center", marginBottom: "1.5rem" }}>
                 "Find your crew. Chart your course. Set sail. Conquer the seas of knowledge."
               </p>
