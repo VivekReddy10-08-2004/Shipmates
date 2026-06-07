@@ -8,6 +8,7 @@ import {
   GiAnchor,
   GiBookCover,
   GiPirateHat,
+  GiCompass,
 } from "react-icons/gi";
 import { MdChevronLeft, MdMenu } from "react-icons/md";
 
@@ -32,6 +33,7 @@ const navItems: NavItem[] = [
 ];
 
 export default function NavBar() {
+  const [showAbout, setShowAbout] = useState<boolean>(false);
   const [hidden, setHidden] = useState<boolean>(() => {
     try {
       return window.localStorage.getItem(STORAGE_KEY) === "1";
@@ -108,6 +110,17 @@ export default function NavBar() {
                   <span className="side-rail-label">{label}</span>
                 </NavLink>
               ))}
+              <button
+                type="button"
+                className="side-rail-link"
+                style={{ background: "none", border: "none", width: "100%", textAlign: "left", cursor: "pointer" }}
+                onClick={() => setShowAbout(true)}
+              >
+                <span className="side-rail-icon">
+                  <GiCompass size={22} />
+                </span>
+                <span className="side-rail-label">About</span>
+              </button>
             </nav>
 
             {/* Hide button at bottom */}
@@ -123,6 +136,44 @@ export default function NavBar() {
           </motion.aside>
         )}
       </AnimatePresence>
+
+      {/* About Modal */}
+      {showAbout && (
+        <div className="modal-backdrop" onClick={() => setShowAbout(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ border: "2px solid var(--gold)" }}>
+            <h2 style={{ fontFamily: "var(--font-heading)", color: "var(--gold)", textAlign: "center", borderBottom: "1px solid var(--border)", paddingBottom: "10px" }}>
+              ⚔️ About Shipmates ⚔️
+            </h2>
+            <div style={{ padding: "10px 0", lineHeight: "1.6", color: "var(--text-main)" }}>
+              <p style={{ fontStyle: "italic", textAlign: "center", marginBottom: "1.5rem" }}>
+                "Find your crew. Chart your course. Set sail. Conquer the seas of knowledge."
+              </p>
+              <p>
+                Welcome aboard, Captain! <strong>Shipmates</strong> is a study buddy matching and collaboration platform themed around nautical voyage, designed to help students navigate the challenging waters of academia together.
+              </p>
+              <ul style={{ paddingLeft: "20px", marginTop: "10px" }}>
+                <li style={{ marginBottom: "8px" }}>
+                  <strong>⚓ Find Your Crew:</strong> Match with study partners at the Dock or form Study Crews for group learning.
+                </li>
+                <li style={{ marginBottom: "8px" }}>
+                  <strong>📜 Quizzes & Flashcards:</strong> Master course topics by charting study guides, playing quizzes, or letting the ship's AI draft practice materials for you.
+                </li>
+                <li style={{ marginBottom: "8px" }}>
+                  <strong>📂 Cargo Hold (Resources):</strong> Share study links, notes, and PDFs with your crew mates.
+                </li>
+                <li style={{ marginBottom: "8px" }}>
+                  <strong>🔥 Voyage Streaks:</strong> Stay consistent on your educational voyages to keep your streak burning!
+                </li>
+              </ul>
+            </div>
+            <div className="modal-actions" style={{ justifyContent: "center" }}>
+              <button className="btn btn-primary" onClick={() => setShowAbout(false)}>
+                Aboard!
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
