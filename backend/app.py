@@ -78,6 +78,9 @@ def seed_admin_user():
                   
 
 def create_app():
+    # Seed admin user on startup if credentials configured
+    seed_admin_user()
+
     app = FastAPI(title="Shipmates", version="1.0.0", description="Study buddy matching and collaboration platform")
 
     # Where we store uploaded profile images
@@ -135,17 +138,15 @@ def create_app():
     
     return app
 
+app = create_app()
+
 if __name__ == "__main__":
     import uvicorn
     
-    # Seed admin user on startup
-    seed_admin_user()
-    
     # Run FastAPI app with Uvicorn
     uvicorn.run(
-        "app:create_app",
+        "app:app",
         host="127.0.0.1",
         port=8001,
-        reload=True,
-        factory=True
+        reload=True
     )
